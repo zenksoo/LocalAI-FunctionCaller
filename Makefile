@@ -29,7 +29,7 @@ install:
 	@uv sync
 
 run:
-	@uv run -m src.main
+	@uv run python3 -m src
 
 debug:
 	@uv run -m pdb -m src.main
