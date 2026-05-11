@@ -12,43 +12,68 @@ from functools import singledispatch
 from .Colors import *
 
 
-def  errors_dispatch() -> Callable[[BaseException], None]:
+def get_error_handler() -> Callable[[BaseException], None]:
     @singledispatch
-    def dispatch(error_type: BaseException) -> None:
-        print(error_type)
+    def _handle_by_type(error_type: BaseException) -> None:
+        print(f"{BG_BLUE} {RESET} {error_type}")
 
-    @dispatch.register(ValidationError)
-    def _(error) -> None:
-        for error in error.errors():
-            print(error)
-            print("\n\n")
-        print(f"Invalid Data: {error.errors()[0]["msg"]}", file=stderr)
+    @_handle_by_type.register(ValidationError)
+    def _(exc: ValidationError) -> None:
+        for error in exc.errors():
+            if error["type"] == "missing":
+                print(f"{BG_BLUE} {RESET} Missing",
+                      f"Required Field: {', '.join([e for e in error["loc"]])}")
+            else:
+                print(f"{BG_BLUE} {RESET} {error["msg"]}")
 
-    @dispatch.register(JSONDecodeError)
-    def _(error) -> None:
-        print(f"{BG_RED}{FG_BLACK}   Error Detected !   {RESET}\n")
-        print(f"{BG_BLUE}  {RESET} Invalid Formate For JSON File: {error}", file=stderr)
-        print("\n")
+    @_handle_by_type.register(JSONDecodeError)
+    def _(exc: JSONDecodeError) -> None:
+        print(f"{BG_BLUE} {RESET} Invalid Formate For JSON File: {exc}\n", file=stderr)
 
-    return dispatch
+    @_handle_by_type.register(PermissionError)
+    def _(exc: PermissionError) -> None:
+        print(f"{BG_BLUE} {RESET} Permission Denied: {exc.filename}")
+
+    @_handle_by_type.register(FileNotFoundError)
+    def _(exc: FileNotFoundError) -> None:
+        print(f"{BG_BLUE} {RESET} File not found: {exc.filename}")
+
+    def render_exception(error: BaseException) -> None:
+        print(f"\n{BG_RED}{FG_BLACK}   Program Failed !!   {RESET}", file=stderr, end="")
+        print(f"{BG_YELLOW}{FG_BLACK} Error Type: {error.__class__.__name__} {RESET}")
+        _handle_by_type(error)
+        print()
+
+    return render_exception
 
 
-def main() -> None:
-    input_path = "./data/input/"
-    ouput_path = "./data/ouput/"
-    fdefinition = "functions_definition.json"
-    input_f = "function_calling_tests.json"
-    output_f = ""
+def encode_functions_name(funcs: List[FunctionDefSchema], llm_model: Small_LLM_Model) -> Dict[str, List[int]]:
 
-    prompts = []
-    with open("data/input/function_calling_tests.json", 'r') as f:
+    result: Dict[str, List[int]] = {}
+    for func in funcs:
+        result[func.name] = llm_model.encode(func.name).tolist()[0]
+    return result
+
+
+
+def main(args: argparse.Namespace) -> None:
+
+    if not args.functions_definition:
+        args.functions_definition = "functions_definition.json"
+    if not args.input_file:
+        args.input_file = "function_calling_tests.json"
+    if not args.output_file:
+        args.output_file = "function_calling_results.json"
+
+    prompts: List[str] = []
+    with open(f"data/input/{args.input_file}", 'r') as f:
         content = json.load(f)
         for prompt in content:
             valid = TestCaseSchema(**prompt)
             prompts.append(valid.prompt)
 
     func_definition: List[FunctionDefSchema] = []
-    with open("data/input/functions_definition.json", 'r') as f:
+    with open(f"data/input/{args.functions_definition}", 'r') as f:
         content = json.load(f)
         for funcdef in content:
             valid = FunctionDefSchema(**funcdef)
@@ -56,16 +81,30 @@ def main() -> None:
 
     llm_model = Small_LLM_Model()
 
-    for prompt in prompts:
-        msg = f"prompt is : {prompt}, all functions : "
-        msg += f"{[f.name for f in func_definition]}, what does the functino name that i use to solve what prompt tell me to do ? "
-        encoded = llm_model.encode(msg).tolist()[0]
-        while True:
-            tokens = llm_model.get_logits_from_input_ids(encoded)
-            new_token = tokens.index(max(tokens))
-            encoded.append(new_token)
-            print(llm_model.decode([new_token]), end="")
-        return
+    encoded_function_name = encode_functions_name(func_definition, llm_model)
+    print(encoded_function_name)
+
+    # tt: List[Dict[str, Any]] = []
+    # i = 0
+    # dic: Dict[str, Any] = {}
+    # for func in func_definition:
+    #     dic["name"] = func.name
+    #     dic["parameters"] = func.parameters
+    #     tt.append(dic)
+
+
+    # for prompt in prompts:
+    # mprompt = f"question: {prompts[0]}, function: fn_substitute_string_with_regex. this function solve the question ? "
+
+    # msg = f"prompt is : {prompt}, all functions : "
+    # msg += f"{[f.name for f in func_definition]}, what does the functino name that i use to solve what prompt tell me to do ? "
+    # encoded = llm_model.encode(mprompt).tolist()[0]
+    # # print(encoded)
+    # while True:
+    #     tokens = llm_model.get_logits_from_input_ids(encoded)
+    #     new_token = tokens.index(max(tokens))
+    #     encoded.append(new_token)
+    #     print(llm_model.decode([new_token]), end="")
 
 
     # string = prompts[0]
@@ -84,21 +123,18 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="call-me-maybe it's ai model")
+
+    parser = argparse.ArgumentParser()
     parser.add_argument('-f', '--functions_definition')
     parser.add_argument('-i', '--input_file')
     parser.add_argument('-o', '--output_file')
-    parser.add_argument('-v', '--verbose')
     args = parser.parse_args()
-    # print(args.functions_definition)
-    # print(args.input_file)
-    # print(args.output_file)
 
-    error_dispatch = errors_dispatch()
+    render_exception = get_error_handler()
 
     try:
-        main()
+        main(args)
     except BaseException as e:
-        error_dispatch(e)
+        render_exception(e)
         sys.exit(1)
     sys.exit(0)
