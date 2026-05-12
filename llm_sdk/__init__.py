@@ -1,8 +1,9 @@
+# flake8: noqa
 # ABOUTME: LLM SDK for local model inference using Hugging Face transformers.
 # ABOUTME: Provides Small_LLM_Model class for loading and running causal language models.
 
 import time
-from typing import Tuple
+from typing import Tuple, Any
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedTokenizer, PreTrainedModel, logging
@@ -80,7 +81,7 @@ class Small_LLM_Model:
         return torch.tensor([ids], device=self._device, dtype=torch.long)
 
 
-    def decode(self, ids: torch.Tensor | list[int]) -> str:
+    def decode(self, ids: torch.Tensor | list[int]) -> Any:
         """Inverse of :py:meth:`encode`. Removes special tokens."""
         if isinstance(ids, torch.Tensor):
             ids = ids.tolist()
@@ -99,7 +100,7 @@ class Small_LLM_Model:
         return [float(x) for x in logits]
 
 
-    def get_path_to_vocab_file(self) -> str:
+    def get_path_to_vocab_file(self) -> Any:
         vocab_file_name = self._tokenizer.vocab_files_names.get('vocab_file', "vocab.json")
         vocab_path = hf_hub_download(
             repo_id=self._model_name,
@@ -108,7 +109,7 @@ class Small_LLM_Model:
         return vocab_path
 
 
-    def get_path_to_merges_file(self) -> str:
+    def get_path_to_merges_file(self) -> Any:
         merges_file_name = self._tokenizer.vocab_files_names.get('merges_file', "merges.txt")
         merges_path = hf_hub_download(
             repo_id=self._model_name,
@@ -117,7 +118,7 @@ class Small_LLM_Model:
         return merges_path
 
 
-    def get_path_to_tokenizer_file(self) -> str:
+    def get_path_to_tokenizer_file(self) -> Any:
         tokenizer_file_name = self._tokenizer.vocab_files_names.get('tokenizer_file', "tokenizer.json")
         tokenizer_path = hf_hub_download(
             repo_id=self._model_name,

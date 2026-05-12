@@ -1,7 +1,7 @@
 from json.decoder import JSONDecodeError
 from pydantic import ValidationError
 from functools import singledispatch
-from typing import Callable
+from typing import List, Callable
 from sys import stderr
 import sys
 
@@ -32,9 +32,10 @@ BG_WHITE = "\033[47m"
 BG_DEFAULT = "\033[49m"
 
 # symbols
-ARROW  = "→"
-OK     = "✔"
-FAIL   = "✘"
+ARROW = "→"
+OK = "✔"
+FAIL = "✘"
+
 
 def get_error_handler() -> Callable[[BaseException], None]:
     @singledispatch
@@ -46,13 +47,15 @@ def get_error_handler() -> Callable[[BaseException], None]:
         for error in exc.errors():
             if error["type"] == "missing":
                 print(f"{BG_BLUE} {RESET} Missing",
-                      f"Required Field: {', '.join([e for e in error["loc"]])}")
+                      "Required Field:",
+                      f"{', '.join([e for e in error["loc"]])}")
             else:
                 print(f"{BG_BLUE} {RESET} {error["msg"]}")
 
     @_handle_by_type.register(JSONDecodeError)
     def _(exc: JSONDecodeError) -> None:
-        print(f"{BG_BLUE} {RESET} Invalid Formate For JSON File: {exc}\n", file=stderr)
+        print(f"{BG_BLUE} {RESET} Invalid",
+              f"Formate For JSON File: {exc}\n", file=stderr)
 
     @_handle_by_type.register(PermissionError)
     def _(exc: PermissionError) -> None:
@@ -63,15 +66,18 @@ def get_error_handler() -> Callable[[BaseException], None]:
         print(f"{BG_BLUE} {RESET} File not found: {exc.filename}")
 
     def render_exception(error: BaseException) -> None:
-        print(f"\n{BG_RED}{FG_BLACK}   Program Failed !!   {RESET}", file=stderr, end="")
-        print(f"{BG_YELLOW}{FG_BLACK} Error Type: {error.__class__.__name__} {RESET}")
+        print(f"\n{BG_RED}{FG_BLACK}   Program Failed !!",
+              f"  {RESET}", file=stderr, end="")
+        print(f"{BG_YELLOW}{FG_BLACK} Error Type:",
+              f"{error.__class__.__name__} {RESET}")
         _handle_by_type(error)
         print()
 
     return render_exception
 
 
-def render_progress_bar(i: int, items=200, bar_length=50):
+def render_progress_bar(i: int, items: int = 200,
+                        bar_length: int = 50) -> None:
     # Hide cursor
     sys.stdout.write("\033[?25l")
 
@@ -90,12 +96,14 @@ def render_progress_bar(i: int, items=200, bar_length=50):
     sys.stdout.write(output + "\033[K")
     sys.stdout.flush()
 
-def render_prompts_stat(i, prompts, passed_prompt):
-        print("PROMPTS [ ", end="")
-        for e in passed_prompt:
-            if e:
-                print(f"{FG_GREEN} {OK} {RESET}", end="")
-            else:
-                print(f"{FG_RED} {FAIL} {RESET}", end="")
-        print(" - " * (len(prompts) + 1 - i), end="")
-        print(" ]")
+
+def render_prompts_stat(i: int, prompts: List[str],
+                        passed_prompt: List[bool]) -> None:
+    print("PROMPTS [ ", end="")
+    for e in passed_prompt:
+        if e:
+            print(f"{FG_GREEN} {OK} {RESET}", end="")
+        else:
+            print(f"{FG_RED} {FAIL} {RESET}", end="")
+    print(" - " * (len(prompts) + 1 - i), end="")
+    print(" ]")

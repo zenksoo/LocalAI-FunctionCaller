@@ -35,7 +35,7 @@ run:
 	@uv run python3 -m src
 
 debug:
-	@uv run -m pdb -m src.main
+	@uv run -m pdb -m src
 
 clean:
 	@echo ""
@@ -66,7 +66,7 @@ lint:
 			(echo "$(BG_RED) $(RESET) $(RED)$(FAIL) flake8 failed$(RESET)"; exit 1)
 	@echo ""
 
-	@echo "$(BG_CYAN)$(BLACK)  mypy    $(RESET)  $(CYAN)$(ARROW) checking types...$(RESET)\n"
+	@echo "$(BG_YELLOW)$(BLACK)  mypy    $(RESET)  $(YELLOW)$(ARROW) checking types...$(RESET)\n"
 	@uv tool run mypy . --warn-return-any        \
 	         --warn-unused-ignores   \
 	         --ignore-missing-imports \
@@ -76,6 +76,6 @@ lint:
 	    (echo "\n$(BG_RED) $(RESET)  $(RED)$(FAIL) mypy failed$(RESET)"; exit 1)
 	@echo ""
 
-	@echo "$(BG_GREEN)    $(OK) all checks passed    $(RESET)"
+	@echo "$(BG_GREEN)$(BLACK)    $(OK) all checks passed    $(RESET)"
 	@echo ""
 

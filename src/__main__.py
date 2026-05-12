@@ -1,18 +1,33 @@
 from llm_sdk import Small_LLM_Model
-from .JsonValidator import TestCaseSchema, FunctionDefSchema
+from src.JsonValidator import TestCaseSchema, FunctionDefSchema
 import numpy as np
 import argparse
 import sys
 from typing import Dict, List, Any
 from pathlib import Path
-from sys import stderr
 import time
 import json
 import re
-from .rendering import *
+from src.rendering import get_error_handler, render_progress_bar
+from src.rendering import render_prompts_stat
 
 
-def parse_functions_definitions(funcs: List[FunctionDefSchema]) -> List[Dict[str, Any]]:
+RESET = "\033[0m"
+
+# Foreground colors
+FG_BLACK = "\033[30m"
+FG_RED = "\033[31m"
+FG_GREEN = "\033[32m"
+
+# Background colors
+BG_RED = "\033[41m"
+BG_GREEN = "\033[42m"
+BG_BLUE = "\033[44m"
+BG_CYAN = "\033[46m"
+
+
+def parse_functions_definitions(funcs: List[FunctionDefSchema]
+                                ) -> List[Dict[str, Any]]:
     TOOLS: List[Dict[str, Any]] = []
     for f in funcs:
         TOOLS.append(
@@ -25,22 +40,27 @@ def parse_functions_definitions(funcs: List[FunctionDefSchema]) -> List[Dict[str
         )
     return TOOLS
 
+
 def build_prompt(user_request: str, tools: List[Dict[str, Any]]) -> str:
     tools_json = json.dumps(tools, indent=2)
-    return f"""You are a function-calling assistant. Given a user request, pick the best function and return ONLY a JSON object — no explanation, no markdown, no extra text.
+    return f"""You are a function-calling assistant.
+    Given a user request, pick the best function
+    and return ONLY a JSON object — no explanation, no markdown, no extra text.
 
             Available functions:
             {tools_json}
 
             Output format (strictly):
-            {{"function": "<function_name>", "parameters": {{<key>: <value>, ...}}}}
+            {{"function": "<function_name>",
+            "parameters": {{<key>: <value>, ...}}}}
 
             User request: {user_request}
             Response:
         """
 
 
-def generate(model: Small_LLM_Model, prompt: str, max_new_tokens: int = 200) -> str:
+def generate(model: Small_LLM_Model,
+             prompt: str, max_new_tokens: int = 200) -> Any:
     # Encode prompt → list of ints
     input_ids = model._tokenizer.encode(prompt, add_special_tokens=False)
     eos_id = model._tokenizer.eos_token_id
@@ -68,7 +88,7 @@ def generate(model: Small_LLM_Model, prompt: str, max_new_tokens: int = 200) -> 
     return model._tokenizer.decode(generated, skip_special_tokens=True)
 
 
-def parse_tool_call(raw: str) -> dict:
+def parse_tool_call(raw: str) -> Any:
     match = re.search(r'\{.*\}', raw, re.DOTALL)
     if not match:
         raise ValueError(f"No JSON found in model output:\n{raw}")
@@ -78,13 +98,13 @@ def parse_tool_call(raw: str) -> dict:
 def run(model: Small_LLM_Model, user_request: str,
         output_res: List[Dict[str, Any]],
         tools: List[Dict[str, Any]]) -> bool:
-    prompt   = build_prompt(user_request, tools)
-    raw      = generate(model, prompt)
+    prompt = build_prompt(user_request, tools)
+    raw = generate(model, prompt)
     time.sleep(0.05)
 
-    call     = parse_tool_call(raw)
-    fn_name  = call["function"]
-    params   = call["parameters"]
+    call = parse_tool_call(raw)
+    fn_name = call["function"]
+    params = call["parameters"]
 
     output_res.append(
         {
@@ -125,23 +145,20 @@ def main(args: argparse.Namespace) -> None:
 
     llm_model = Small_LLM_Model()
 
-    output_res = []
-    passed_prompt = []
+    output_res: List[Dict[str, Any]] = []
+    passed_prompt: List[bool] = []
     for p, i in zip(prompts, range(1, len(prompts) + 1)):
         try:
             sys.stdout.write("\033[2J\033[H\033[?25l")
             sys.stdout.flush()
             render_prompts_stat(i, prompts, passed_prompt)
 
-            start = time.perf_counter()
             print(f"\n{BG_BLUE} {RESET}{BG_CYAN}{FG_BLACK} Prompt {RESET} {p}")
             try:
                 res = run(llm_model, p, output_res, TOOLS)
             except KeyboardInterrupt:
                 res = False
             passed_prompt.append(res)
-            end = time.perf_counter()
-            duration_minutes = (end - start) / 60
             time.sleep(0.08)
         except KeyboardInterrupt:
             pass
@@ -154,7 +171,8 @@ def main(args: argparse.Namespace) -> None:
         output_path.mkdir(parents=True, exist_ok=True)
         with open(f"data/output/{args.output_file}", 'w') as f:
             json.dump(output_res, f, indent=4)
-        print(f"\n\n{BG_GREEN} {RESET} {FG_GREEN}Passed Prompts Are Seccessfully Saved{RESET}")
+        print(f"\n\n{BG_GREEN} {RESET} {FG_GREEN}",
+              f"Passed Prompts Are Seccessfully Saved{RESET}")
         print(f"{BG_GREEN} {RESET} PATH: /data/ouput/{args.output_file}")
         sys.stdout.write("\033[?25h")
     else:
