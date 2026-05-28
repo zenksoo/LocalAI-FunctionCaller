@@ -56,7 +56,7 @@ class Config(BaseModel):
         if not args.input:
             args.input = "data/input/function_calling_tests.json"
         if not args.output:
-            args.output = "output/function_calling_results.json"
+            args.output = "data/output/function_calling_results.json"
 
         return Config(prompts=get_prompts(args.input),
                       tools=get_functions_defschema(args.functions_definition),
@@ -85,6 +85,22 @@ and return ONLY a JSON object — no explanation, no markdown, no extra text.
 {{"function": "<function_name>", \
 "parameters": {{<key>: <value>, ...}}}}
 
+        Examples:
+User request: "Add 5 and 10"
+Response: {{"function": "fn_add_numbers", "parameters": {{"a": 5, "b": 10}}}}
+
+User request: "What is the square root of 16?"
+Response: {{"function": "fn_get_square_root", "parameters": {{"a": 16}}}}
+
+User request: "Say hi to Youssef"
+Response: {{"function": "fn_greet", "parameters": {{"name": "Youssef"}}}}
+
+User request: "What is the weather today?"
+Response: {{"function": "", "parameters": {{}}}}
+
+        If no function matches, return exactly:
+{{"function": "", "parameters": {{}}}}
+
         User request: {user_request}
         Response:
         """
@@ -111,14 +127,29 @@ and return ONLY a JSON object — no explanation, no markdown, no extra text.
 
 class ConstrainedGenerator(BaseModel):
     def generate(self, model: Small_LLM_Model, prompt: str, valid_names: List[str], max_new_tokens: int = 200) -> Any:
+
+        json_schema_tokens = [
+            " {\"", # 0
+            "function", # 1
+            "\":", # 2
+            " \"", # 3
+            "func_name", # 4 constrain decoding here
+            "\",", # 5
+            " \"", # 6
+            "parameters", # 7
+            "\":",
+            " {\"",
+            ""
+        ]
+
         input_ids = model._tokenizer.encode(prompt, add_special_tokens=False)
         eos_id = model._tokenizer.eos_token_id
 
         generated: List[int] = []
-        state = "START"
+        state = 0
         fn_name_so_far = ""
         for i in range(max_new_tokens):
-            logits = model.get_logits_from_input_ids(input_ids)
+            logits = np.array(model.get_logits_from_input_ids(input_ids))
             if state == "STATE_4_FN_NAME":
                 for token_id in range(len(logits)):
                     token_str = model._tokenizer.decode([token_id])
@@ -131,7 +162,7 @@ class ConstrainedGenerator(BaseModel):
                         logits[token_id] = -float('inf')
 
                 if all(v == -float('inf') for v in logits):
-                    raise ValueError(f"❌ No function matched the request.")
+                    raise ValueError(f"No function matched the request.")
 
             next_token = int(np.argmax(logits))
 
@@ -139,6 +170,7 @@ class ConstrainedGenerator(BaseModel):
                 break
 
             token_str = model._tokenizer.decode([next_token], skip_special_tokens=True)
+            print(f"#{token_str}#")
             input_ids.append(next_token)
             generated.append(next_token)
 
@@ -146,26 +178,20 @@ class ConstrainedGenerator(BaseModel):
             if partial.count('{') > 0 and partial.count('}') >= partial.count('{'):
                 break
 
-            # update state
-            if state == "START" and "{" in token_str:
-                state = "STATE_2_FN_KEY"
 
-            elif state == "STATE_2_FN_KEY" and "function" in token_str:
-                state = "STATE_3_OPEN_QUOTE"
+            if state != 4 and json_schema_tokens[0] == token_str:
+                json_schema_tokens = json_schema_tokens[1:]
+                state += 1
+                if state == 4:
+                    fn_name_so_far = ""
 
-            elif state == "STATE_3_OPEN_QUOTE" and token_str == " \"":
-                state = "STATE_4_FN_NAME"
-                fn_name_so_far = ""
-
-            elif state == "STATE_4_FN_NAME":
+            elif state == 4:
                 fn_name_so_far += token_str
-                # check if we've completed a valid name
                 if fn_name_so_far in valid_names:
                     chosen_fn = fn_name_so_far
-                    state     = "STATE_5_CLOSE_QUOTE"
+                    state = 5
+                    json_schema_tokens = json_schema_tokens[1:]
 
-            elif state == "STATE_5_CLOSE_QUOTE" and '"' in token_str:
-                state = "STATE_6_PARAMS"
         return model._tokenizer.decode(generated, skip_special_tokens=True)
 
 
@@ -179,11 +205,12 @@ class FunctionCaller(BaseModel):
 
         prompt = registry.build_prompt(prompt)
         response = constrained_gen.generate(model, prompt, registry.get_valid_names())
+        print(f"the response is : {response}")
         json_response = registry.parse_tool_call(response)
+        print(f"the jsonresponse is : {json_response}")
         if not registry.validate_call(json_response):
             json_response = None
         return json_response
-
 
 if __name__ == "__main__":
     render_exception = get_error_handler()
@@ -197,7 +224,11 @@ if __name__ == "__main__":
         for prompt in config.prompts:
             raw = caller.run(prompt)
             if raw:
-                results.append(raw)
+                results.append({
+                    "prompt": prompt,
+                    "name": raw["function"],
+                    "parameters": raw["parameters"]
+                })
                 passed_promts.append(True)
             else:
                 passed_promts.append(False)
