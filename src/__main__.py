@@ -75,38 +75,30 @@ class ToolRegistry(BaseModel):
     def build_prompt(self, user_request: str):
         tools_json = json.dumps(self.tools, indent=2)
         return f"""You are a function-calling assistant. \
-Given a user request, pick the best function \
-and return ONLY a JSON object — no explanation, no markdown, no extra text.
+        Given a user request, pick the best function \
+        and return ONLY a JSON object — no explanation, no markdown, no extra text.
 
         Available functions:
 {tools_json}
 
         Output format (strictly): \
-{{"function": "<function_name>", \
-"parameters": {{<key>: <value>, ...}}}}
-
-        Examples:
-User request: "Add 5 and 10"
-Response: {{"function": "fn_add_numbers", "parameters": {{"a": 5, "b": 10}}}}
-
-User request: "What is the square root of 16?"
-Response: {{"function": "fn_get_square_root", "parameters": {{"a": 16}}}}
-
-User request: "Say hi to Youssef"
-Response: {{"function": "fn_greet", "parameters": {{"name": "Youssef"}}}}
-
-User request: "What is the weather today?"
-Response: {{"function": "", "parameters": {{}}}}
+{{"function": "<function_name>", "parameters": {{<key>: <value>, ...}}}}
 
         If no function matches, return exactly:
-{{"function": "", "parameters": {{}}}}
+        {{"function": "", "parameters": {{}}}}
 
         User request: {user_request}
         Response:
+
         """
 
     def get_valid_names(self) -> List[str]:
         return [t["name"] for t in self.tools]
+
+    def get_valid_parameters(self) -> Dict[str, List[str]]:
+        fn_names = self.get_valid_names()
+        fn_para = [t["parameters"] for t in self.tools]
+        return {key: list(val.keys()) for key, val in zip(fn_names, fn_para)}
 
     def parse_tool_call(self, raw: str) -> Any:
         match = re.search(r'\{.*\}', raw, re.DOTALL)
@@ -127,41 +119,29 @@ Response: {{"function": "", "parameters": {{}}}}
 
 class ConstrainedGenerator(BaseModel):
     def generate(self, model: Small_LLM_Model, prompt: str, valid_names: List[str], max_new_tokens: int = 200) -> Any:
-
-        json_schema_tokens = [
-            " {\"", # 0
-            "function", # 1
-            "\":", # 2
-            " \"", # 3
-            "func_name", # 4 constrain decoding here
-            "\",", # 5
-            " \"", # 6
-            "parameters", # 7
-            "\":",
-            " {\"",
-            ""
-        ]
+        parameters = ""
 
         input_ids = model._tokenizer.encode(prompt, add_special_tokens=False)
         eos_id = model._tokenizer.eos_token_id
 
-        generated: List[int] = []
+        generated: List[int] = model._tokenizer.encode("{\"function\": \"", add_special_tokens=False)
+        input_ids += generated
         state = 0
-        fn_name_so_far = ""
+        fn_name_generated = ""
         for i in range(max_new_tokens):
             logits = np.array(model.get_logits_from_input_ids(input_ids))
-            if state == "STATE_4_FN_NAME":
+            if state == 0:
                 for token_id in range(len(logits)):
                     token_str = model._tokenizer.decode([token_id])
-                    condidate = fn_name_so_far + token_str
+                    condidate = fn_name_generated + token_str
+
 
                     is_prefix = any(n.startswith(condidate) for n in valid_names)
                     is_exact = condidate in valid_names
 
                     if not is_prefix and not is_exact:
                         logits[token_id] = -float('inf')
-
-                if all(v == -float('inf') for v in logits):
+                if np.all(logits == -float('inf')):
                     raise ValueError(f"No function matched the request.")
 
             next_token = int(np.argmax(logits))
@@ -170,7 +150,10 @@ class ConstrainedGenerator(BaseModel):
                 break
 
             token_str = model._tokenizer.decode([next_token], skip_special_tokens=True)
+            if state == 1:
+                parameters += token_str
             print(f"#{token_str}#")
+
             input_ids.append(next_token)
             generated.append(next_token)
 
@@ -178,19 +161,13 @@ class ConstrainedGenerator(BaseModel):
             if partial.count('{') > 0 and partial.count('}') >= partial.count('{'):
                 break
 
-
-            if state != 4 and json_schema_tokens[0] == token_str:
-                json_schema_tokens = json_schema_tokens[1:]
-                state += 1
-                if state == 4:
-                    fn_name_so_far = ""
-
-            elif state == 4:
-                fn_name_so_far += token_str
-                if fn_name_so_far in valid_names:
-                    chosen_fn = fn_name_so_far
-                    state = 5
-                    json_schema_tokens = json_schema_tokens[1:]
+            if state == 0:
+                fn_name_generated += token_str
+                if fn_name_generated in valid_names:
+                    input_ids += model._tokenizer.encode("\", \"parameters\": {\"")
+                    generated += model._tokenizer.encode("\", \"parameters\": {\"")
+                    chosen_fn = fn_name_generated
+                    state = 1
 
         return model._tokenizer.decode(generated, skip_special_tokens=True)
 
@@ -217,6 +194,8 @@ if __name__ == "__main__":
     try:
         config = Config.load()
         registry = ToolRegistry(tools=config.tools)
+        print(registry.get_valid_parameters())
+
         caller = FunctionCaller(registry=registry)
 
         results: List[Dict[str, Any]] = []
