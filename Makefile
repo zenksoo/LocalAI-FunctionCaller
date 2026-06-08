@@ -39,7 +39,7 @@ debug:
 
 clean:
 	@echo ""
-	@echo "$(BG_YELLOW)$(BLACK)         🧹 CLEAN         $(RESET)"
+	@echo "$(BG_YELLOW)$(BLACK)         CLEAN         $(RESET)"
 
 	@sleep 0.3
 	@rm -rf $(PYCACHE_FILES) && \
@@ -56,7 +56,7 @@ clean:
 
 lint:
 	@echo ""
-	@echo "$(BG_GREEN)$(BLACK)    🔍 LINT CHECKS    $(RESET)"
+	@echo "$(BG_GREEN)$(BLACK)    LINT CHECKS    $(RESET)"
 	@echo ""
 
 	@echo "$(BG_YELLOW)$(BLACK)  flake8  $(RESET)  $(YELLOW)$(ARROW) checking style...$(RESET)"

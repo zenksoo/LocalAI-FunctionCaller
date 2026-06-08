@@ -92,13 +92,33 @@ def render_progress_bar(i: int, items: int = 200,
     sys.stdout.flush()
 
 
-def render_prompts_stat(i: int, prompts: List[str],
+def render_prompts_stat(prompts: List[str],
                         passed_prompt: List[bool]) -> None:
-    print("PROMPTS [ ", end="")
+    print("PASSED PROMPTS [ ", end="")
     for e in passed_prompt:
         if e:
             print(f"{FG_GREEN} {OK} {RESET}", end="")
         else:
             print(f"{FG_RED} {FAIL} {RESET}", end="")
-    print(" - " * (len(prompts) + 1 - i), end="")
+    print(" - " * (len(prompts) - len(passed_prompt)), end="")
     print(" ]")
+
+
+def get_msg_template(color: str) -> Callable:
+    def cyan_msg_bar(title: str, msg: str) -> None:
+        print(f"\n\n{BG_CYAN}{FG_BLACK}  {title}  {BG_DEFAULT}   {msg}")
+
+    def yellow_msg_bar(title: str, msg: str) -> None:
+        print(f"\n{BG_YELLOW}{FG_BLACK}  {title}   {RESET}   {msg}")
+
+    def green_msg_bar(title: str, msg: str) -> None:
+        print(f"\n{BG_GREEN}{FG_GREEN}  {title}  {RESET}   {msg}")
+
+    if color == "cyan":
+        return cyan_msg_bar
+    elif color == "yellow":
+        return yellow_msg_bar
+    elif color == "green":
+        return green_msg_bar
+    else:
+        raise ValueError(f"Unregistred Color Name '{color}'!!")
