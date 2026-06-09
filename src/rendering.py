@@ -94,7 +94,7 @@ def render_progress_bar(i: int, items: int = 200,
 
 def render_prompts_stat(prompts: List[str],
                         passed_prompt: List[bool]) -> None:
-    print("PASSED PROMPTS [ ", end="")
+    print(f"{FG_WHITE}PASSED PROMPTS [ ", end="")
     for e in passed_prompt:
         if e:
             print(f"{FG_GREEN} {OK} {RESET}", end="")
@@ -112,7 +112,7 @@ def get_msg_template(color: str) -> Callable:
         print(f"\n{BG_YELLOW}{FG_BLACK}  {title}   {RESET}   {msg}")
 
     def green_msg_bar(title: str, msg: str) -> None:
-        print(f"\n{BG_GREEN}{FG_GREEN}  {title}  {RESET}   {msg}")
+        print(f"\n{BG_GREEN}{FG_BLACK}  {title}  {RESET}   {msg}")
 
     if color == "cyan":
         return cyan_msg_bar

@@ -94,17 +94,37 @@ Available functions:
 {tools_json}
 
 Rules for filling parameters:
-- For regex parameters: construct a proper regex pattern (e.g. [0-9]+ for \
-    digits) — do NOT copy raw words unless the user is matching a literal word
-- For replacement parameters: use the exact replacement CHARACTER, not its \
-    name (if name have character meaning)
-  (e.g. "asterisks" → "*", "hash" → "#", "dash" → "-", "underscore" → "_")
+- Regex character classes MUST be wrapped in square brackets: [abc] not abc
+- NEVER use the English word for a symbol — always use the symbol itself
+- "replace","substitute","swap","change","convert" all mean the same operation
+
+Examples for filling parameters:
+request: Replace all numbers in "hi 42 bye" with NUM
+response: {{"function": "fn_substitute_string_with_regex", "parameters": \
+    {{"source_string": "hi 42 bye", "regex": "[0-9]+", "replacement": "NUM"}}}}
+
+request: Replace vowels in "hello world" with asterisks
+response: {{"function": "fn_substitute_string_with_regex", "parameters": \
+    {{\
+        "source_string": "hello world", \
+        "regex": "[aeiouAEIOU]", "replacement": "*"}}}}
+
+request: Replace 'cat' with 'dog' in "the cat sat"
+response: {{"function": "fn_substitute_string_with_regex", "parameters": \
+    {{\
+        "source_string": "the cat sat", \
+        "regex": "cat", "replacement": "dog"}}}}
+
+request: Substitute all spaces in "hello world foo" with dashes
+response: {{"function": "fn_substitute_string_with_regex", "parameters": \
+{{"source_string": "hello world foo", "regex": "[ ]+", "replacement": "-"}}}}
 
 Output format (strictly): \
 {{"function": "<function_name>", "parameters": {{<key>: <value>, ...}}}}
 
-If no function description matches the user request, return exactly: \
-{{"function": "NONE", "parameters": {{}}}}
+If no function description matches the user request the functino name will \
+    be 'none' and return exactly: \
+{{"function": "none", "parameters": {{}}}}
 
 User request:
     {user_request}
@@ -124,9 +144,10 @@ class ConstrainedGenerator(BaseModel):
     def generate(self, model: Small_LLM_Model, prompt: str,
                  registry: ToolRegistry, max_new_tokens: int = 200
                  ) -> Dict[str, str]:
+
         prompt = registry.build_prompt(prompt)
         valid_names = registry.get_valid_names()
-        valid_names.append("NONE")
+        valid_names.append("none")
         valid_parameters = registry.get_valid_parameters()
 
         input_ids = model._tokenizer.encode(prompt, add_special_tokens=False)
@@ -135,17 +156,20 @@ class ConstrainedGenerator(BaseModel):
         generated: List[int] = model._tokenizer.encode(
             "{\"function\": \"", add_special_tokens=False)
         input_ids += generated
+
         state = 0
         fn_name_generated: str = ""
+
         parameters: List[str] = []
         parameter_name: str = ""
+
+        pre_injected_token_str: str = "{\"function\": \""
 
         print(SAVE_CURSOR_POSITION)
 
         for i in range(max_new_tokens):
             logits = np.array(model.get_logits_from_input_ids(input_ids))
             token_id = 0
-
             while (state == 0 and token_id < len(logits)):
                 token_str = model._tokenizer.decode([token_id])
                 condidate = fn_name_generated + token_str
@@ -171,10 +195,10 @@ class ConstrainedGenerator(BaseModel):
 
             if np.all(logits == -float('inf')):
                 if state == 0:
+                    pre_injected_token_str = "\"}"
                     pre_injected_token = model._tokenizer.encode("\"}")
                     input_ids += pre_injected_token
                     generated += pre_injected_token
-                    get_msg_template("green")("Per Injected", "'\"}'")
                     break
                 else:
                     next_token = model._tokenizer.encode("}}")[0]
@@ -194,7 +218,7 @@ class ConstrainedGenerator(BaseModel):
                 generated, skip_special_tokens=True)
             print(TO_SAVED_POSITION, CLEAR_DOWN)
             render_progress_bar(i)
-            get_msg_template("cyan")("LLM TOKEN", f"\"{token_str}\"")
+            get_msg_template("cyan")("LLM TOKEN   ", f"'{token_str}'")
 
             if (generated_str.count('{') > 0 and
                generated_str.count('}') >= generated_str.count('{')):
@@ -203,31 +227,34 @@ class ConstrainedGenerator(BaseModel):
             if state == 0:
                 fn_name_generated += token_str
                 if fn_name_generated in valid_names:
-                    if fn_name_generated == "NONE":
+                    if fn_name_generated == "none":
+                        pre_injected_token_str = "\"}"
                         pre_injected_token = model._tokenizer.encode("\"}")
-                        get_msg_template("green")("Per Injected", "'\"}'")
                         input_ids += pre_injected_token
                         generated += pre_injected_token
                         break
+                    pre_injected_token_str = "\", \"parameters\": {"
                     pre_injected_token = model._tokenizer.encode(
-                        "\", \"parameters\": {")
+                        pre_injected_token_str)
                     if len(valid_parameters[fn_name_generated]) > 0:
-                        pre_injected_token += model._tokenizer.encode("\"")
+                        pre_injected_token_str = "\""
+                        pre_injected_token += model._tokenizer.encode(
+                            pre_injected_token_str
+                        )
                     input_ids += pre_injected_token
                     generated += pre_injected_token
-                    get_msg_template("green")(
-                        "Per Injected Tokens", "'\", \"parameters\": {'")
                     state = 1
+
             elif state == 1:
                 parameter_name += token_str
                 if parameter_name in valid_parameters[fn_name_generated]:
+                    pre_injected_token_str = "\": "
                     pre_injected_token = model._tokenizer.encode("\": ")
                     input_ids += pre_injected_token
                     generated += pre_injected_token
                     parameters.append(parameter_name)
                     parameter_name = ""
                     state = 2
-                    get_msg_template("green")("Per Injected", "'\": '")
 
             elif state == 2:
                 if "," in token_str:
@@ -235,19 +262,24 @@ class ConstrainedGenerator(BaseModel):
                     generated += model._tokenizer.encode(" \"")
                     state = 1
 
-            get_msg_template("yellow")("Response", generated_str)
+            get_msg_template("green")(
+                "Per Injected", f"'{pre_injected_token_str}'")
+            get_msg_template("yellow")("Response   ", generated_str)
+            pre_injected_token_str = ""
 
+        generated_str = model._tokenizer.decode(
+            generated, skip_special_tokens=True)
         json_generated = json.loads(generated_str)
         result = {"prompt": ""}
 
-        if fn_name_generated != "NONE" and fn_name_generated in valid_names:
+        if fn_name_generated != "none" and fn_name_generated in valid_names:
             result["name"] = json_generated["function"]
             if parameters == valid_parameters[fn_name_generated]:
                 result["parameters"] = json_generated["parameters"]
             else:
-                result["parameters"] = "invalid parameters"
+                result["parameters"] = "UNKNOWN"
         else:
-            result["name"] = "invalid function name"
+            result["name"] = "UNKNOWN"
 
         return result
 
