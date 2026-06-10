@@ -23,6 +23,8 @@ class Config(BaseModel):
     prompts: List[str] = []
     tools: List[dict[str, Any]] = []
     output_path: str
+    input_path: str
+    fn_definition_path: str
 
     @classmethod
     def load(cls) -> "Config":
@@ -71,7 +73,9 @@ class Config(BaseModel):
 
         return Config(prompts=get_prompts(args.input),
                       tools=get_functions_defschema(args.functions_definition),
-                      output_path=args.output)
+                      output_path=args.output,
+                      input_path=args.input,
+                      fn_definition_path=args.functions_definition)
 
     def write_results(self, results: List[Dict[str, Any]]) -> None:
         path = "/".join(self.output_path.split("/")[:-1])
@@ -264,7 +268,7 @@ class ConstrainedGenerator(BaseModel):
 
             get_msg_template("green")(
                 "Per Injected", f"'{pre_injected_token_str}'")
-            get_msg_template("yellow")("Response   ", generated_str)
+            get_msg_template("yellow")("Response    ", generated_str)
             pre_injected_token_str = ""
 
         generated_str = model._tokenizer.decode(
@@ -284,6 +288,17 @@ class ConstrainedGenerator(BaseModel):
         return result
 
 
+def render_configuration(config: Config) -> None:
+    get_msg_template("white")(
+                "PATHS              ", "")
+    get_msg_template("magenta")(
+                "FUNCTION DEFINITION", f"'{config.fn_definition_path}'")
+    get_msg_template("magenta")(
+                "USER PROMPTS       ", f"'{config.input_path}'")
+    get_msg_template("magenta")(
+                "OUTPUT PATH        ", f"'{config.output_path}'")
+
+
 if __name__ == "__main__":
     render_exception = get_error_handler()
     try:
@@ -301,6 +316,7 @@ if __name__ == "__main__":
             response: Dict[str, str] = {}
 
             print(RESET_TERMINAL)
+            render_configuration(config)
             render_prompts_stat(config.prompts, passed_prompts)
             get_msg_template("green")("PROMPT", prompt)
             try:
@@ -313,14 +329,20 @@ if __name__ == "__main__":
                 passed_prompts.append(False)
             results.append(response)
 
+        print(RESET_TERMINAL)
+        render_configuration(config)
         render_prompts_stat(config.prompts, passed_prompts)
 
         end = time.perf_counter()
         exuction_time = (end - start) / 60
         with open("excution_time.txt", 'w') as f:
             f.write(f"{exuction_time:.6f}")
-
-        config.write_results(results)
+        try:
+            config.write_results(results)
+            get_msg_template("green")(
+                "[+] All DONE and SAVED", "")
+        except (PermissionError, IOError) as e:
+            render_exception(e)
     except SystemExit:
         pass
     except (BaseException, KeyboardInterrupt) as e:

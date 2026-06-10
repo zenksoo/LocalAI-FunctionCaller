@@ -88,13 +88,14 @@ def render_progress_bar(i: int, items: int = 200,
 
     output = f"\r|{bar}| {percent:>5.1f}% ({i}/{items})"
 
-    sys.stdout.write(output + "\033[K")
+    sys.stdout.write(output + "\033[K\n")
     sys.stdout.flush()
 
 
 def render_prompts_stat(prompts: List[str],
                         passed_prompt: List[bool]) -> None:
-    print(f"{FG_WHITE}PASSED PROMPTS [ ", end="")
+    print(f"\n{BG_WHITE}{FG_BLACK}  PASSED PROMPTS       {RESET}    [ ",
+          end="")
     for e in passed_prompt:
         if e:
             print(f"{FG_GREEN} {OK} {RESET}", end="")
@@ -105,20 +106,12 @@ def render_prompts_stat(prompts: List[str],
 
 
 def get_msg_template(color: str) -> Callable:
-    def cyan_msg_bar(title: str, msg: str) -> None:
-        print(f"\n\n{BG_CYAN}{FG_BLACK}  {title}  {BG_DEFAULT}   {msg}")
-
-    def yellow_msg_bar(title: str, msg: str) -> None:
-        print(f"\n{BG_YELLOW}{FG_BLACK}  {title}   {RESET}   {msg}")
-
-    def green_msg_bar(title: str, msg: str) -> None:
-        print(f"\n{BG_GREEN}{FG_BLACK}  {title}  {RESET}   {msg}")
-
-    if color == "cyan":
-        return cyan_msg_bar
-    elif color == "yellow":
-        return yellow_msg_bar
-    elif color == "green":
-        return green_msg_bar
-    else:
+    availble_templates = [BG_CYAN, BG_YELLOW, BG_GREEN, BG_MAGENTA, BG_WHITE]
+    availble_colors = ["cyan", "yellow", "green", "magenta", "white"]
+    try:
+        template = availble_templates[availble_colors.index(color)]
+        return (
+            lambda title, msg:
+            print(f"\n{template}{FG_BLACK}  {title}  {RESET}   {msg}"))
+    except ValueError:
         raise ValueError(f"Unregistred Color Name '{color}'!!")
