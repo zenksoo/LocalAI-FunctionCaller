@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Function Caller</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+    <header>
+        <div class="logo">
+            <svg viewBox="0 0 24 24">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+            </svg>
+        </div>
+        <span class="header-title">Function Caller</span>
+        <div class="status-pill">
+            <span class="status-dot"></span>
+            local-llm · Qwen/Qwen3-0.6B
+        </div>
+    </header>
+
+    <div class="layout">
+
+        <!-- slider -->
+        <aside class="sidebar">
+            <div class="sidebar-top">
+                <button class="new-chat-btn" id="new-chat-btn">
+                    <svg viewBox="0 0 24 24">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    New chat
+                </button>
+            </div>
+            <p class="sidebar-section-label">Chats</p>
+            <div class="chat-list" id="chat-list"></div>
+        </aside>
+
+        <!-- chat area -->
+        <div class="chat-wrap">
+            <div class="messages" id="messages"></div>
+
+            <div class="input-area">
+                <div class="input-box">
+                    <textarea id="user-input" placeholder="Ask anything..." rows="1"></textarea>
+                    <button class="send-btn" id="send-btn" aria-label="Send">
+                        <svg viewBox="0 0 24 24">
+                            <line x1="22" y1="2" x2="11" y2="13" />
+                            <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                        </svg>
+                    </button>
+                </div>
+                <p class="input-hint">Enter to send &nbsp;·&nbsp; Shift+Enter for new line</p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- delete confirm toast -->
+    <div class="toast" id="toast">
+        <span id="toast-msg">Delete this chat?</span>
+        <button class="toast-confirm" id="toast-confirm">Delete</button>
+        <button class="toast-cancel" id="toast-cancel">Cancel</button>
+    </div>
+    <script src="{{ url_for('static', filename='main.js') }}"></script>
+</body>
+</html>
+

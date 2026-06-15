@@ -16,6 +16,7 @@ BG_YELLOW  = \033[43m
 BG_CYAN    = \033[46m
 BG_DEFAULT = \033[49m
 
+
 # symbols
 ARROW  = →
 OK     = ✔
@@ -31,11 +32,21 @@ install:
 	@uv sync && \
 			echo "\n$(BG_GREEN)$(BLACK)  All Dependencies Successfully Installed  $(RESET)" || \
 			echo "\n$(BG_RED) $(RESET)  $(RED)$(FAIL) Installation Failed $(RESET)"
+
 run:
 	@uv run python3 -m src
 
 debug:
 	@uv run -m pdb -m src
+
+# for web version
+# checking if .venv already created then install flask and run the app
+web:
+	@if [ ! -d ".venv" ]; then \
+		uv venv --clear;\
+	fi
+	@uv pip install flask --python .venv
+	@uv run flask --app web/app run
 
 clean:
 	@echo ""
@@ -79,3 +90,4 @@ lint:
 	@echo "$(BG_GREEN)$(BLACK)    $(OK) all checks passed    $(RESET)"
 	@echo ""
 
+.PHONY: web
