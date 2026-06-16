@@ -46,7 +46,7 @@ web:
 		uv venv --clear;\
 	fi
 	@uv pip install flask flask_cors --python .venv
-	@uv run python3 -m web
+	@uv run python3 -m web.app
 
 clean:
 	@echo ""
