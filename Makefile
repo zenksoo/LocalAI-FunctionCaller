@@ -45,8 +45,8 @@ web:
 	@if [ ! -d ".venv" ]; then \
 		uv venv --clear;\
 	fi
-	@uv pip install flask --python .venv
-	@uv run flask --app web/app run
+	@uv pip install flask flask_cors --python .venv
+	@uv run python3 -m web
 
 clean:
 	@echo ""

@@ -146,8 +146,8 @@ Response:
 
 class ConstrainedGenerator(BaseModel):
     def generate(self, model: Small_LLM_Model, prompt: str,
-                 registry: ToolRegistry, max_new_tokens: int = 200
-                 ) -> Dict[str, str]:
+                 registry: ToolRegistry, with_animation: bool = True,
+                 max_new_tokens: int = 200) -> Dict[str, str]:
 
         prompt = registry.build_prompt(prompt)
         valid_names = registry.get_valid_names()
@@ -220,9 +220,10 @@ class ConstrainedGenerator(BaseModel):
 
             generated_str = model._tokenizer.decode(
                 generated, skip_special_tokens=True)
-            print(TO_SAVED_POSITION, CLEAR_DOWN)
-            render_progress_bar(i)
-            get_msg_template("cyan")("LLM TOKEN   ", f"'{token_str}'")
+            if with_animation:
+                print(TO_SAVED_POSITION, CLEAR_DOWN)
+                render_progress_bar(i)
+                get_msg_template("cyan")("LLM TOKEN   ", f"'{token_str}'")
 
             if (generated_str.count('{') > 0 and
                generated_str.count('}') >= generated_str.count('{')):
@@ -266,10 +267,11 @@ class ConstrainedGenerator(BaseModel):
                     generated += model._tokenizer.encode(" \"")
                     state = 1
 
-            get_msg_template("green")(
-                "Per Injected", f"'{pre_injected_token_str}'")
-            get_msg_template("yellow")("Response    ", generated_str)
-            pre_injected_token_str = ""
+            if with_animation:
+                get_msg_template("green")(
+                    "Per Injected", f"'{pre_injected_token_str}'")
+                get_msg_template("yellow")("Response    ", generated_str)
+                pre_injected_token_str = ""
 
         generated_str = model._tokenizer.decode(
             generated, skip_special_tokens=True)

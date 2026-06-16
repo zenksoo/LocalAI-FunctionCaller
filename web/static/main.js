@@ -1,4 +1,3 @@
-// store data localy in label named fc_chats
 const STORAGE_KEY = 'fc_chats';
 
 function loadChats() {
@@ -62,9 +61,7 @@ function renderSidebar() {
     });
 }
 
-/* ================================================================
-   RENDER MESSAGES for active chat
-================================================================ */
+// Render messgaes for active chat
 function renderMessages() {
     const container = document.getElementById('messages');
     container.innerHTML = '';
@@ -81,9 +78,9 @@ function renderMessages() {
         <p>Ask in plain language — the model picks the right function and returns the result.</p>
         <div class="chips">
           <span class="chip">What is the sum of 12 and 29?</span>
-          <span class="chip">Multiply 7 by 8</span>
-          <span class="chip">What time is it?</span>
-          <span class="chip">Search for "python"</span>
+          <span class="chip">Greet shrek</span>
+          <span class="chip">Reverse the string 'world'</span>
+          <span class="chip">What is the square root of 16?</span>
         </div>
       </div>`;
 
@@ -104,10 +101,8 @@ function renderMessages() {
     container.scrollTop = container.scrollHeight;
 }
 
-/* ================================================================
-   BUILD A MESSAGE ELEMENT from a stored message object
-   msg = { role: 'user'|'ai', text, time, fn?: { name, args, result } }
-================================================================ */
+/* BUILD A MESSAGE ELEMENT from a stored message object
+   msg = { role: 'user'|'ai', text, time, fn?: { name, args, result } }*/
 function buildMsgEl(msg) {
     const el = document.createElement('div');
     el.className = 'msg ' + (msg.role === 'user' ? 'user' : 'ai');
@@ -122,7 +117,7 @@ function buildMsgEl(msg) {
 
         const resultHtml = msg.fn.result !== undefined ? `
       <div class="result-box">
-        <span class="result-label">Result</span>
+        <span class="result-label">Result: </span>
         <span class="result-val">${escHtml(String(msg.fn.result))}</span>
       </div>` : '';
 
@@ -271,9 +266,10 @@ textarea.addEventListener('keydown', e => {
 
 document.getElementById('send-btn').addEventListener('click', handleSend);
 
-function handleSend() {
+async function handleSend() {
     const text = textarea.value.trim();
     if (!text) return;
+    console.log(text)
 
     /* auto-create a chat if none is active */
     if (!activeChatId) {
@@ -295,30 +291,39 @@ function handleSend() {
 
     /* show thinking */
     showThinking();
-
-    /*
-    ── WIRE YOUR LLM PIPELINE HERE ──
-
-    Call your local LLM / Flask API, then when you get the response:
-
-      hideThinking();
-      addMessage({
-        role: 'ai',
-        text: 'I used fn_add_numbers to compute that.',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        fn: {                        // omit this key if no function was called
-          name: 'fn_add_numbers',
-          args: { a: 2, b: 5 },
-          result: 7
+    const response = await fetch(
+        "http://127.0.0.1:8080/api/chat",
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ "prompt": text })
         }
-      });
-    */
+    )
+    console.log(response)
+    if (!response.ok){
+        console.log("faild")
+        return
+    }
+
+    const res = await response.json()
+    console.log(res)
+    hideThinking();
+    addMessage({
+        role: 'ai',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        fn: {
+            text: "{}",
+            name: res["name"],
+            args: res["parameters"],
+            result: res["result"]
+        }
+    });
 }
 
-// new chat button
 document.getElementById('new-chat-btn').addEventListener('click', createChat);
 
-// healpers
 function escHtml(s) {
     return String(s)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;')

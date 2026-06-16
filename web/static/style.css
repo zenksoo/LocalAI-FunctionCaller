@@ -548,13 +548,11 @@ header {
 }
 
 .result-box {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
     background: var(--green-bg);
     border: 1px solid var(--green-br);
     border-radius: 8px;
     padding: 10px 14px;
+    font-weight: 600;
 }
 
 .result-label {
@@ -562,13 +560,11 @@ header {
     color: var(--green);
     text-transform: uppercase;
     letter-spacing: .06em;
-    font-weight: 600;
 }
 
 .result-val {
     font-family: var(--mono);
-    font-size: 22px;
-    font-weight: 500;
+    font-size: 12px;
     color: var(--green);
 }
 
