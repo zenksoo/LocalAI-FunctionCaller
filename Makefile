@@ -72,7 +72,7 @@ lint:
 
 	@echo "$(BG_YELLOW)$(BLACK)  flake8  $(RESET)  $(YELLOW)$(ARROW) checking style...$(RESET)"
 	@sleep 0.3
-	@uv tool run flake8 . && \
+	@uv tool run flake8 src web && \
 			echo "$(BG_GREEN) $(RESET)  $(GREEN)$(OK) flake8 passed$(RESET)" || \
 			(echo "$(BG_RED) $(RESET) $(RED)$(FAIL) flake8 failed$(RESET)"; exit 1)
 	@echo ""

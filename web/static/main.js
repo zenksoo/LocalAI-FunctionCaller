@@ -16,7 +16,6 @@ function uid() {
 let chats = loadChats();
 let activeChatId = null;
 
-// render left slider with his content
 function renderSidebar() {
     const list = document.getElementById('chat-list');
     list.innerHTML = '';
@@ -61,7 +60,7 @@ function renderSidebar() {
     });
 }
 
-// Render messgaes for active chat
+//    RENDER MESSAGES for active chat
 function renderMessages() {
     const container = document.getElementById('messages');
     container.innerHTML = '';
@@ -78,9 +77,9 @@ function renderMessages() {
         <p>Ask in plain language — the model picks the right function and returns the result.</p>
         <div class="chips">
           <span class="chip">What is the sum of 12 and 29?</span>
-          <span class="chip">Greet shrek</span>
-          <span class="chip">Reverse the string 'world'</span>
+          <span class="chip">Greet john</span>
           <span class="chip">What is the square root of 16?</span>
+          <span class="chip">Reverse the string 'world'</span>
         </div>
       </div>`;
 
@@ -101,38 +100,74 @@ function renderMessages() {
     container.scrollTop = container.scrollHeight;
 }
 
-/* BUILD A MESSAGE ELEMENT from a stored message object
-   msg = { role: 'user'|'ai', text, time, fn?: { name, args, result } }*/
+// BUILD A MESSAGE ELEMENT from a stored message object
+// msg = { role: 'user'|'ai', text, time, fn?: { name, args, result } }
+function highlightJson(obj) {
+    delete obj["message"]
+    const json = JSON.stringify(obj, null, 2);
+    const escaped = escHtml(json);
+
+    return escaped.replace(
+        /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+\.?\d*([eE][+-]?\d+)?)/g,
+        match => {
+            let cls = 'jn'; // number by default
+            if (/^"/.test(match)) {
+                cls = /:$/.test(match) ? 'jk' : 'js'; // key if followed by colon, else string
+            } else if (/true|false|null/.test(match)) {
+                cls = 'jb';
+            }
+            return `<span class="${cls}">${match}</span>`;
+        }
+    ).replace(/([{}[\],])/g, '<span class="jp">$1</span>');
+}
+
+
+let jsonBoxCounter = 0;
+
+function buildJsonBox(data) {
+    const boxId = 'json-box-' + (jsonBoxCounter++);
+    const noFn = !data || data.function.name == "none";
+
+    const labelText = noFn ? 'No Function Matched' : 'JSON Response';
+    const dotColor = noFn ? 'var(--red)' : 'var(--accent)';
+
+    const footIcon = noFn
+        ? `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`
+        : `<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>`;
+
+    const footClass = noFn ? 'json-box-foot warn' : 'json-box-foot';
+
+    const footMessage = noFn
+        ? 'No matching function found for this request.'
+        : `${data.message}`;
+
+    return `
+    <div class="json-box" id="${boxId}">
+      <div class="json-box-head">
+        <span class="json-box-label">
+          <span class="pulse-dot" style="background:${dotColor}"></span>
+          ${labelText}
+        </span>
+        <button class="copy-btn" onclick="copyJson(this)">
+          <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <span class="copy-label">Copy</span>
+        </button>
+      </div>
+      <div class="json-box-body">
+        <pre>${highlightJson(data)}</pre>
+      </div>
+      <div class="${footClass}">
+        ${footIcon}
+        <span>${escHtml(footMessage)}</span>
+      </div>
+    </div>`;
+}
+
+
+// building message element
 function buildMsgEl(msg) {
     const el = document.createElement('div');
     el.className = 'msg ' + (msg.role === 'user' ? 'user' : 'ai');
-
-    let fnHtml = '';
-    if (msg.fn) {
-        const argsHtml = Object.entries(msg.fn.args || {}).map(([k, v]) => `
-      <div class="arg-row">
-        <span class="arg-key">${escHtml(k)}</span>
-        <span class="arg-val">${escHtml(String(v))}</span>
-      </div>`).join('');
-
-        const resultHtml = msg.fn.result !== undefined ? `
-      <div class="result-box">
-        <span class="result-label">Result: </span>
-        <span class="result-val">${escHtml(String(msg.fn.result))}</span>
-      </div>` : '';
-
-        fnHtml = `
-      <div class="fn-card">
-        <div class="fn-card-head">
-          <span class="fn-badge">function</span>
-          <span class="fn-card-name">${escHtml(msg.fn.name)}</span>
-        </div>
-        <div class="fn-card-body">
-          ${argsHtml ? `<p class="args-label">Arguments</p><div class="args-grid">${argsHtml}</div>` : ''}
-          ${resultHtml}
-        </div>
-      </div>`;
-    }
 
     if (msg.role === 'user') {
         el.innerHTML = `
@@ -145,8 +180,7 @@ function buildMsgEl(msg) {
         el.innerHTML = `
       <div class="avatar ai">AI</div>
       <div class="bubble">
-        <div class="bubble-text">${escHtml(msg.text)}</div>
-        ${fnHtml}
+        ${buildJsonBox(msg.data)}
         <span class="ts">${msg.time}</span>
       </div>`;
     }
@@ -154,9 +188,33 @@ function buildMsgEl(msg) {
     return el;
 }
 
-/* ================================================================
-   CHAT ACTIONS
-================================================================ */
+
+// copy button at the reponse json box
+function copyJson(btn) {
+    const box = btn.closest('.json-box');
+    const text = box.querySelector('pre').innerText;
+
+    navigator.clipboard.writeText(text).then(() => {
+        const label = btn.querySelector('.copy-label');
+        const svg = btn.querySelector('svg');
+        const originalSvg = svg.outerHTML;
+        const originalText = label.textContent;
+
+        btn.classList.add('copied');
+        svg.outerHTML = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
+        label.textContent = 'Copied';
+
+        setTimeout(() => {
+            btn.classList.remove('copied');
+            btn.querySelector('svg').outerHTML = originalSvg;
+            label.textContent = originalText;
+        }, 1500);
+    }).catch(() => {
+        alert('Could not copy — clipboard access may be blocked on this page.');
+    });
+}
+
+//    CHAT ACTIONS
 function createChat() {
     const chat = {
         id: uid(),
@@ -191,7 +249,6 @@ function addMessage(msg) {
     renderSidebar();
 
     const container = document.getElementById('messages');
-    /* remove empty state if present */
     const empty = container.querySelector('.empty');
     if (empty) empty.remove();
 
@@ -199,7 +256,8 @@ function addMessage(msg) {
     container.scrollTop = container.scrollHeight;
 }
 
-/* ── THINKING indicator ── */
+
+// ai thinking
 function showThinking() {
     const container = document.getElementById('messages');
     const el = document.createElement('div');
@@ -218,9 +276,7 @@ function hideThinking() {
     if (el) el.remove();
 }
 
-/* ================================================================
-   DELETE WITH TOAST CONFIRM
-================================================================ */
+
 let pendingDeleteId = null;
 
 function confirmDelete(id, title) {
@@ -248,9 +304,8 @@ document.getElementById('toast-cancel').addEventListener('click', () => {
     document.getElementById('toast').classList.remove('show');
 });
 
-/* ================================================================
-   INPUT HANDLING
-================================================================ */
+
+//    input handling
 const textarea = document.getElementById('user-input');
 
 function autoResize(el) {
@@ -269,7 +324,6 @@ document.getElementById('send-btn').addEventListener('click', handleSend);
 async function handleSend() {
     const text = textarea.value.trim();
     if (!text) return;
-    console.log(text)
 
     /* auto-create a chat if none is active */
     if (!activeChatId) {
@@ -291,6 +345,8 @@ async function handleSend() {
 
     /* show thinking */
     showThinking();
+
+    // create post request
     const response = await fetch(
         "http://127.0.0.1:8080/api/chat",
         {
@@ -300,29 +356,30 @@ async function handleSend() {
             },
             body: JSON.stringify({ "prompt": text })
         }
-    )
-    console.log(response)
-    if (!response.ok){
-        console.log("faild")
-        return
+    );
+
+    if (!response.ok) {
+        hideThinking();
+        addMessage({
+            role: 'ai',
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            data: null
+        });
+        return;
     }
 
-    const res = await response.json()
-    console.log(res)
+    const res = await response.json();
     hideThinking();
     addMessage({
         role: 'ai',
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        fn: {
-            text: "{}",
-            name: res["name"],
-            args: res["parameters"],
-            result: res["result"]
-        }
+        data: res
     });
 }
 
+
 document.getElementById('new-chat-btn').addEventListener('click', createChat);
+
 
 function escHtml(s) {
     return String(s)

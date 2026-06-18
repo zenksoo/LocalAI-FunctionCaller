@@ -28,9 +28,8 @@ def fn_get_square_root(a: int) -> float:
     return math.sqrt(a)
 
 
-def fn_substitute_string_with_regex(
-    source_string: str, regex: str, replacement: str
-    ) -> str:
+def fn_substitute_string_with_regex(source_string: str,
+                                    regex: str, replacement: str) -> str:
     return re.sub(regex, replacement, source_string)
 
 
@@ -51,7 +50,12 @@ def call_right_implementation(data: Dict[str, Any]) -> Any:
 
 @app.route('/')
 def index():
-    return render_template("index.html")
+    return render_template("home.html")
+
+
+@app.route('/chat')
+def chatpage():
+    return render_template("chat.html")
 
 
 @app.route('/api/chat', methods=['POST'])
@@ -64,10 +68,16 @@ def test():
     data = request.get_json()
     prompt = data.get('prompt')
     res = constrained_gen.generate(model, prompt, registry, False)
-    result = call_right_implementation(res)
-    if result:
-        res["result"] = result
-    return jsonify(res)
+    call_result = call_right_implementation(res)
+    response: Dict = {}
+    response["type"] = "function_call"
+    response["function"] = res
+    response["result"] = {"value": call_result, "status": "success"}
+    response["message"] = f"function calling result: {call_result}"
+    if not call_result:
+        response["result"] = {"value": "", "status": "failed"}
+        response["message"] = "no function much the user request"
+    return jsonify(response)
 
 
 if __name__ == "__main__":

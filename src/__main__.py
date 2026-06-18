@@ -283,9 +283,9 @@ class ConstrainedGenerator(BaseModel):
             if parameters == valid_parameters[fn_name_generated]:
                 result["parameters"] = json_generated["parameters"]
             else:
-                result["parameters"] = "UNKNOWN"
+                result["parameters"] = "none"
         else:
-            result["name"] = "UNKNOWN"
+            result["name"] = "none"
 
         return result
 
