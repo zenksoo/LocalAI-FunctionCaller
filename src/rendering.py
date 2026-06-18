@@ -48,9 +48,10 @@ def get_error_handler() -> Callable[[BaseException], None]:
             if error["type"] == "missing":
                 print(f"{BG_BLUE} {RESET} Missing",
                       "Required Field:",
-                      f"{', '.join([e for e in error["loc"]])}")
+                      f"{', '.join([e for e in error["loc"]])}",
+                      file=stderr)
             else:
-                print(f"{BG_BLUE} {RESET} {error["msg"]}")
+                print(f"{BG_BLUE} {RESET} {error["msg"]}", file=stderr)
 
     @_handle_by_type.register(JSONDecodeError)
     def _(exc: JSONDecodeError) -> None:
@@ -59,19 +60,21 @@ def get_error_handler() -> Callable[[BaseException], None]:
 
     @_handle_by_type.register(PermissionError)
     def _(exc: PermissionError) -> None:
-        print(f"{BG_BLUE} {RESET} Permission Denied: {exc.filename}")
+        print(f"{BG_BLUE} {RESET} Permission Denied: {exc.filename}",
+              file=stderr)
 
     @_handle_by_type.register(FileNotFoundError)
     def _(exc: FileNotFoundError) -> None:
-        print(f"{BG_BLUE} {RESET} File not found: {exc.filename}")
+        print(f"{BG_BLUE} {RESET} File not found: {exc.filename}",
+              file=stderr)
 
     def render_exception(error: BaseException) -> None:
         print(f"\n{BG_RED}{FG_BLACK}   Program Failed !!",
               f"  {RESET}", file=stderr, end="")
         print(f"{BG_YELLOW}{FG_BLACK} Error Type:",
-              f"{error.__class__.__name__} {RESET}")
+              f"{error.__class__.__name__} {RESET}", file=stderr)
         _handle_by_type(error)
-        print()
+        print(file=stderr)
 
     return render_exception
 

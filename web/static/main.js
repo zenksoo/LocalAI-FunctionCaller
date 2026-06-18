@@ -110,9 +110,9 @@ function highlightJson(obj) {
     return escaped.replace(
         /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+\.?\d*([eE][+-]?\d+)?)/g,
         match => {
-            let cls = 'jn'; // number by default
+            let cls = 'jn';
             if (/^"/.test(match)) {
-                cls = /:$/.test(match) ? 'jk' : 'js'; // key if followed by colon, else string
+                cls = /:$/.test(match) ? 'jk' : 'js';
             } else if (/true|false|null/.test(match)) {
                 cls = 'jb';
             }

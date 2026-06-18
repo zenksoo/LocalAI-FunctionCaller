@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 from llm_sdk import Small_LLM_Model
-from src.__main__ import ConstrainedGenerator, ToolRegistry
+from src import ConstrainedGenerator, ToolRegistry
 import json
 from typing import Dict, Any
 import math
@@ -49,17 +49,17 @@ def call_right_implementation(data: Dict[str, Any]) -> Any:
 
 
 @app.route('/')
-def index():
+def index() -> Any:
     return render_template("home.html")
 
 
 @app.route('/chat')
-def chatpage():
+def chatpage() -> Any:
     return render_template("chat.html")
 
 
 @app.route('/api/chat', methods=['POST'])
-def test():
+def test() -> Any:
     with open('data/input/functions_definition.json', 'r') as f:
         tools = json.loads(f.read())
     model = Small_LLM_Model()
