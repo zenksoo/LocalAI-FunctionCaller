@@ -1,407 +1,146 @@
-const STORAGE_KEY = 'fc_chats';
+const log = document.getElementById('log');
+const form = document.getElementById('composer');
+const input = document.getElementById('input');
+const sendBtn = document.getElementById('send');
 
-function loadChats() {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
-    catch { return []; }
-}
+function appendRow(role, prefixText) {
+    const row = document.createElement('div');
+    row.className = 'row ' + role;
 
-function saveChats(chats) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(chats));
-}
+    const prefix = document.createElement('span');
+    prefix.className = 'prefix';
+    prefix.textContent = prefixText;
 
-function uid() {
-    return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-}
+    const content = document.createElement('span');
+    content.className = 'content';
+    if (role == "") {
 
-let chats = loadChats();
-let activeChatId = null;
-
-function renderSidebar() {
-    const list = document.getElementById('chat-list');
-    list.innerHTML = '';
-
-    if (chats.length === 0) {
-        list.innerHTML = `
-      <div class="no-chats">
-        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        No chats yet.<br/>Hit "New chat" to start.
-      </div>`;
-        return;
     }
 
-    [...chats].reverse().forEach(chat => {
-        const el = document.createElement('div');
-        el.className = 'chat-item' + (chat.id === activeChatId ? ' active' : '');
-        el.dataset.id = chat.id;
-        el.innerHTML = `
-      <div class="chat-item-icon">
-        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-      </div>
-      <div class="chat-item-info">
-        <div class="chat-item-title">${escHtml(chat.title)}</div>
-        <div class="chat-item-meta">${formatDate(chat.createdAt)}</div>
-      </div>
-      <button class="chat-delete-btn" data-delete="${chat.id}" aria-label="Delete chat">
-        <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-      </button>
-    `;
-
-        el.addEventListener('click', e => {
-            if (e.target.closest('[data-delete]')) return;
-            switchChat(chat.id);
-        });
-
-        el.querySelector('[data-delete]').addEventListener('click', e => {
-            e.stopPropagation();
-            confirmDelete(chat.id, chat.title);
-        });
-
-        list.appendChild(el);
-    });
+    row.appendChild(prefix);
+    row.appendChild(content);
+    log.appendChild(row);
+    log.scrollTop = log.scrollHeight;
+    return content;
 }
 
-//    RENDER MESSAGES for active chat
-function renderMessages() {
-    const container = document.getElementById('messages');
-    container.innerHTML = '';
-
-    const chat = chats.find(c => c.id === activeChatId);
-
-    if (!chat || !activeChatId || chat.messages.length === 0) {
-        container.innerHTML = `
-      <div class="empty">
-        <div class="empty-icon">
-          <svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-        </div>
-        <h2>What do you need?</h2>
-        <p>Ask in plain language — the model picks the right function and returns the result.</p>
-        <div class="chips">
-          <span class="chip">What is the sum of 12 and 29?</span>
-          <span class="chip">Greet john</span>
-          <span class="chip">What is the square root of 16?</span>
-          <span class="chip">Reverse the string 'world'</span>
-        </div>
-      </div>`;
-
-        container.querySelectorAll('.chip').forEach(chip => {
-            chip.addEventListener('click', () => {
-                document.getElementById('user-input').value = chip.textContent;
-                document.getElementById('user-input').focus();
-                autoResize(document.getElementById('user-input'));
-            });
-        });
-        return;
-    }
-
-    chat.messages.forEach(msg => {
-        container.appendChild(buildMsgEl(msg));
-    });
-
-    container.scrollTop = container.scrollHeight;
+function showThinking(contentEl) {
+    contentEl.innerHTML = '<span class="thinking"><span></span><span></span><span></span></span>';
 }
 
-// BUILD A MESSAGE ELEMENT from a stored message object
-// msg = { role: 'user'|'ai', text, time, fn?: { name, args, result } }
-function highlightJson(obj) {
-    delete obj["message"]
-    const json = JSON.stringify(obj, null, 2);
-    const escaped = escHtml(json);
-
-    return escaped.replace(
-        /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+\.?\d*([eE][+-]?\d+)?)/g,
-        match => {
-            let cls = 'jn';
-            if (/^"/.test(match)) {
-                cls = /:$/.test(match) ? 'jk' : 'js';
-            } else if (/true|false|null/.test(match)) {
-                cls = 'jb';
-            }
-            return `<span class="${cls}">${match}</span>`;
-        }
-    ).replace(/([{}[\],])/g, '<span class="jp">$1</span>');
+function setBusy(isBusy) {
+    input.disabled = isBusy;
+    sendBtn.disabled = isBusy;
 }
 
-
-let jsonBoxCounter = 0;
-
-function buildJsonBox(data) {
-    const boxId = 'json-box-' + (jsonBoxCounter++);
-    const noFn = !data || data.function.name == "none";
-
-    const labelText = noFn ? 'No Function Matched' : 'JSON Response';
-    const dotColor = noFn ? 'var(--red)' : 'var(--accent)';
-
-    const footIcon = noFn
-        ? `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`
-        : `<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>`;
-
-    const footClass = noFn ? 'json-box-foot warn' : 'json-box-foot';
-
-    const footMessage = noFn
-        ? 'No matching function found for this request.'
-        : `${data.message}`;
-
-    return `
-    <div class="json-box" id="${boxId}">
-      <div class="json-box-head">
-        <span class="json-box-label">
-          <span class="pulse-dot" style="background:${dotColor}"></span>
-          ${labelText}
-        </span>
-        <button class="copy-btn" onclick="copyJson(this)">
-          <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          <span class="copy-label">Copy</span>
-        </button>
-      </div>
-      <div class="json-box-body">
-        <pre>${highlightJson(data)}</pre>
-      </div>
-      <div class="${footClass}">
-        ${footIcon}
-        <span>${escHtml(footMessage)}</span>
-      </div>
-    </div>`;
-}
-
-
-// building message element
-function buildMsgEl(msg) {
-    const el = document.createElement('div');
-    el.className = 'msg ' + (msg.role === 'user' ? 'user' : 'ai');
-
-    if (msg.role === 'user') {
-        el.innerHTML = `
-      <div class="avatar usr">U</div>
-      <div class="bubble">
-        <div class="bubble-text">${escHtml(msg.text)}</div>
-        <span class="ts">${msg.time}</span>
-      </div>`;
-    } else {
-        el.innerHTML = `
-      <div class="avatar ai">AI</div>
-      <div class="bubble">
-        ${buildJsonBox(msg.data)}
-        <span class="ts">${msg.time}</span>
-      </div>`;
-    }
-
-    return el;
-}
-
-
-// copy button at the reponse json box
-function copyJson(btn) {
-    const box = btn.closest('.json-box');
-    const text = box.querySelector('pre').innerText;
-
-    navigator.clipboard.writeText(text).then(() => {
-        const label = btn.querySelector('.copy-label');
-        const svg = btn.querySelector('svg');
-        const originalSvg = svg.outerHTML;
-        const originalText = label.textContent;
-
-        btn.classList.add('copied');
-        svg.outerHTML = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
-        label.textContent = 'Copied';
-
-        setTimeout(() => {
-            btn.classList.remove('copied');
-            btn.querySelector('svg').outerHTML = originalSvg;
-            label.textContent = originalText;
-        }, 1500);
-    }).catch(() => {
-        alert('Could not copy — clipboard access may be blocked on this page.');
-    });
-}
-
-//    CHAT ACTIONS
-function createChat() {
-    const chat = {
-        id: uid(),
-        title: 'New chat',
-        createdAt: Date.now(),
-        messages: [],
-    };
-    chats.push(chat);
-    saveChats(chats);
-    switchChat(chat.id);
-}
-
-function switchChat(id) {
-    activeChatId = id;
-    renderSidebar();
-    renderMessages();
-    document.getElementById('user-input').focus();
-}
-
-/* ── ADD a message to active chat and persist ── */
-function addMessage(msg) {
-    const chat = chats.find(c => c.id === activeChatId);
-    if (!chat) return;
-    chat.messages.push(msg);
-
-    /* auto-title from first user message */
-    if (chat.title === 'New chat' && msg.role === 'user') {
-        chat.title = msg.text.slice(0, 36) + (msg.text.length > 36 ? '…' : '');
-    }
-
-    saveChats(chats);
-    renderSidebar();
-
-    const container = document.getElementById('messages');
-    const empty = container.querySelector('.empty');
-    if (empty) empty.remove();
-
-    container.appendChild(buildMsgEl(msg));
-    container.scrollTop = container.scrollHeight;
-}
-
-
-// ai thinking
-function showThinking() {
-    const container = document.getElementById('messages');
-    const el = document.createElement('div');
-    el.className = 'msg ai'; el.id = 'thinking-row';
-    el.innerHTML = `
-    <div class="avatar ai">AI</div>
-    <div class="thinking">
-      <div class="dot"></div><div class="dot"></div><div class="dot"></div>
-    </div>`;
-    container.appendChild(el);
-    container.scrollTop = container.scrollHeight;
-}
-
-function hideThinking() {
-    const el = document.getElementById('thinking-row');
-    if (el) el.remove();
-}
-
-
-let pendingDeleteId = null;
-
-function confirmDelete(id, title) {
-    pendingDeleteId = id;
-    document.getElementById('toast-msg').textContent =
-        'Delete "' + title.slice(0, 28) + (title.length > 28 ? '…' : '') + '"?';
-    document.getElementById('toast').classList.add('show');
-}
-
-document.getElementById('toast-confirm').addEventListener('click', () => {
-    if (!pendingDeleteId) return;
-    chats = chats.filter(c => c.id !== pendingDeleteId);
-    saveChats(chats);
-    if (activeChatId === pendingDeleteId) {
-        activeChatId = chats.length ? chats[chats.length - 1].id : null;
-    }
-    pendingDeleteId = null;
-    document.getElementById('toast').classList.remove('show');
-    renderSidebar();
-    renderMessages();
-});
-
-document.getElementById('toast-cancel').addEventListener('click', () => {
-    pendingDeleteId = null;
-    document.getElementById('toast').classList.remove('show');
-});
-
-
-//    input handling
-const textarea = document.getElementById('user-input');
-
-function autoResize(el) {
-    el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 140) + 'px';
-}
-
-textarea.addEventListener('input', () => autoResize(textarea));
-
-textarea.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
-});
-
-document.getElementById('send-btn').addEventListener('click', handleSend);
-
-async function handleSend() {
-    const text = textarea.value.trim();
+async function handleSubmit(e) {
+    e.preventDefault();
+    const text = input.value.trim();
     if (!text) return;
 
-    /* auto-create a chat if none is active */
-    if (!activeChatId) {
-        const chat = { id: uid(), title: 'New chat', createdAt: Date.now(), messages: [] };
-        chats.push(chat);
-        saveChats(chats);
-        activeChatId = chat.id;
-        renderSidebar();
-        renderMessages();
-    }
+    appendRow('user', 'you ~').textContent = text;
+    input.value = '';
+    setBusy(true);
 
-    textarea.value = '';
-    textarea.style.height = 'auto';
+    const botContent = appendRow('bot', 'qwen3 ~');
+    showThinking(botContent);
 
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    try {
+        const response = await fetch(
+            "http://127.0.0.1:8080/api/chat",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ "prompt": text })
+            }
+        );
 
-    /* add user message */
-    addMessage({ role: 'user', text, time });
-
-    /* show thinking */
-    showThinking();
-
-    // create post request
-    const response = await fetch(
-        "http://127.0.0.1:8080/api/chat",
-        {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ "prompt": text })
+        if (!response.ok) {
+            return;
         }
-    );
 
-    if (!response.ok) {
-        hideThinking();
-        addMessage({
-            role: 'ai',
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            data: null
-        });
-        return;
+        const res = await response.json();
+        if (res.llm_response.name == "none") {
+            renderResponse(botContent, "no function registred solve your prompt")
+        } else {
+            renderResponse(botContent, res)
+        }
+        console.log(res)
+    } catch (err) {
+        botContent.parentElement.classList.add('error');
+        botContent.textContent = 'error: ' + err.message;
+    } finally {
+        setBusy(false);
+        input.focus();
     }
+}
 
-    const res = await response.json();
-    hideThinking();
-    addMessage({
-        role: 'ai',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        data: res
+
+form.addEventListener('submit', handleSubmit);
+input.focus();
+
+
+function renderResponse(contentEl, reply) {
+    if (typeof reply === 'string') {
+        contentEl.classList.add("failed")
+        contentEl.textContent = reply;
+    } else {
+        renderJsonBlock(contentEl, reply);
+    }
+}
+
+function renderJsonBlock(contentEl, obj) {
+    contentEl.innerHTML = '';
+    const jsonText = JSON.stringify(obj, null, 2);
+
+    const block = document.createElement('div');
+    block.className = 'json-block';
+
+    const header = document.createElement('div');
+    header.className = 'json-header';
+
+    const label = document.createElement('span');
+    label.className = 'json-label';
+    label.textContent = obj.type || 'json';
+
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'copy-btn';
+    copyBtn.textContent = 'copy';
+    copyBtn.addEventListener('click', async () => {
+        try {
+            await navigator.clipboard.writeText(jsonText);
+            copyBtn.textContent = 'copied';
+        } catch (err) {
+            copyBtn.textContent = 'failed';
+        } finally {
+            setTimeout(() => { copyBtn.textContent = 'copy'; }, 1200);
+        }
     });
+
+    header.appendChild(label);
+    header.appendChild(copyBtn);
+
+    const pre = document.createElement('pre');
+    pre.className = 'json-body';
+    pre.innerHTML = syntaxHighlight(jsonText);
+
+    block.appendChild(header);
+    block.appendChild(pre);
+    contentEl.appendChild(block);
 }
 
-
-document.getElementById('new-chat-btn').addEventListener('click', createChat);
-
-
-function escHtml(s) {
-    return String(s)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+function syntaxHighlight(jsonText) {
+    return jsonText
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+            (match) => {
+                let cls = 'jn';
+                if (/^"/.test(match)) cls = /:$/.test(match) ? 'jk' : 'jv-str';
+                else if (/true|false/.test(match)) cls = 'jb';
+                else if (/null/.test(match)) cls = 'jz';
+                return '<span class="' + cls + '">' + match + '</span>';
+            });
 }
-
-function formatDate(ts) {
-    const d = new Date(ts);
-    const now = new Date();
-    const diffDays = Math.floor((now - d) / 86400000);
-    if (diffDays === 0) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return d.toLocaleDateString([], { weekday: 'short' });
-    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-}
-
-
-(function init() {
-    if (chats.length > 0) {
-        activeChatId = chats[chats.length - 1].id;
-    }
-    renderSidebar();
-    renderMessages();
-})();

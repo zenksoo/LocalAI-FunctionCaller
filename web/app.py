@@ -50,16 +50,11 @@ def call_right_implementation(data: Dict[str, Any]) -> Any:
 
 @app.route('/')
 def index() -> Any:
-    return render_template("home.html")
-
-
-@app.route('/chat')
-def chatpage() -> Any:
-    return render_template("chat.html")
+    return render_template("index.html")
 
 
 @app.route('/api/chat', methods=['POST'])
-def test() -> Any:
+def generate_llm_response() -> Any:
     with open('data/input/functions_definition.json', 'r') as f:
         tools = json.loads(f.read())
     model = Small_LLM_Model()
@@ -69,14 +64,15 @@ def test() -> Any:
     prompt = data.get('prompt')
     res = constrained_gen.generate(model, prompt, registry, False)
     call_result = call_right_implementation(res)
+    res["prompt"] = prompt
     response: Dict = {}
-    response["type"] = "function_call"
-    response["function"] = res
-    response["result"] = {"value": call_result, "status": "success"}
-    response["message"] = f"function calling result: {call_result}"
+    response["request_type"] = "function_call"
+    if (res["name"] == "none"):
+        response["request_type"] = "Unknown"
+    response["llm_response"] = res
+    response["fncall_result"] = {"value": call_result, "status": "success"}
     if not call_result:
-        response["result"] = {"value": "", "status": "failed"}
-        response["message"] = "no function much the user request"
+        response["fncall_result"] = {"value": "", "status": "failed"}
     return jsonify(response)
 
 

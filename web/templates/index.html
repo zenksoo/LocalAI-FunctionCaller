@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>qwen3 · local</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+    <div class="app">
+        <header class="bar">
+            <span class="dot"></span>
+            <span class="model-name">Qwen/Qwen3-0.6B · local</span>
+        </header>
+
+        <main id="log" class="log" aria-live="polite"></main>
+
+        <form id="composer" class="composer">
+            <span class="prompt-char">&#10095;</span>
+            <input id="input" type="text" autocomplete="off" placeholder="type a message..." />
+            <button id="send" type="submit" aria-label="send">&#8594;</button>
+        </form>
+    </div>
+
+    <script src="{{ url_for('static', filename='main.js') }}"></script>
+</body>
+
+</html>
