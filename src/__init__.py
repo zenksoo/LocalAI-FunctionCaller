@@ -1,4 +1,4 @@
-from .generation_core import Config, ToolRegistry, ConstrainedGenerator
+from .generation_core import Config, ToolRegistry, ConstrainedGenerator, ConstrainedFnGenerator, ConstrainedParGenerator
 from .rendering import (render_progress_bar, render_prompts_stat,
                         get_error_handler, get_msg_template)
 

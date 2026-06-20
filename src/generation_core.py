@@ -94,6 +94,68 @@ class Config(BaseModel):
 class ToolRegistry(BaseModel):
     tools: List[Dict[str, Any]] = []
 
+    def build_fn_prompt(self, user_request: str) -> str:
+        def function_with_description() -> Dict[str, str]:
+            return {e["name"]: e["description"] for e in self.tools}
+
+        available_functions = function_with_description()
+        return f"""You are a function-calling assistant. \
+Given a user request, pick the best function \
+and return ONLY a JSON object of the right function name and none if no function matche the user request
+Available functions:
+    {available_functions}
+
+If no function description matches the user request the functino name will be 'none'
+
+User request:
+    {user_request}
+
+Response:
+        """
+
+
+    def build_param_prompt(self, user_request: str, function_name: str) -> str:
+        def function_with_parameters() -> Dict[str, str]:
+            return {function_name: e["parameters"] for e in self.tools if e["name"] == function_name}
+
+        available_functions = function_with_parameters()
+        print(available_functions)
+        return f"""you are function parameter generator
+
+chosen function parameter:
+{available_functions}
+
+
+Rules for filling parameters:
+- Regex character classes MUST be wrapped in square brackets: [abc] not abc
+- NEVER use the English word for a symbol — always use the symbol itself
+- "replace","substitute","swap","change","convert" all mean the same operation
+
+Examples for filling parameters:
+request: Replace all numbers in "hi 42 bye" with NUM
+response:{{"parameters": {{"source_string": "hi 42 bye",\
+    "regex": "[0-9]+", "replacement": "NUM"}}}}
+
+request: Replace vowels in "hello world" with asterisks
+response: {{"parameters": \
+    {{\
+        "source_string": "hello world", \
+        "regex": "[aeiouAEIOU]", "replacement": "*"}}}}
+
+request: Replace 'cat' with 'dog' in "the cat sat"
+response: {{"parameters": {{\
+        "source_string": "the cat sat", \
+        "regex": "cat", "replacement": "dog"}}}}
+
+request: Substitute all spaces in "hello world foo" with dashes
+response: {{"parameters": {{"source_string": "hello world foo",\
+"regex": "[ ]+", "replacement": "-"}}}}
+
+User request:
+    {user_request}
+Response:
+        """
+
     def build_prompt(self, user_request: str) -> str:
         tools_json = json.dumps(self.tools, indent=2)
         return f"""You are a function-calling assistant. \
@@ -294,3 +356,152 @@ class ConstrainedGenerator(BaseModel):
             result["name"] = "none"
 
         return result
+
+
+
+# generate function name for the given prompt
+class ConstrainedFnGenerator(BaseModel):
+    def generate(self, model: Small_LLM_Model,
+                 prompt: str, registry: ToolRegistry,
+                 max_new_tokens: int = 200) -> dict[str: Any]:
+        prompt = registry.build_fn_prompt(prompt)
+        valid_names = registry.get_valid_names()
+        valid_names.append("none")
+
+        input_ids = model._tokenizer.encode(prompt, add_special_tokens=False)
+        eos_id = model._tokenizer.eos_token_id
+        generated = model._tokenizer.encode("{\"name\": \"")
+
+        input_ids += generated
+
+        state = 1
+        fn_name_generated: str = ""
+
+
+        for i in range(max_new_tokens):
+            logits = np.array(model.get_logits_from_input_ids(input_ids))
+            token_id = 0
+            while (state == 1 and token_id < len(logits)):
+                token_str = model._tokenizer.decode([token_id])
+                condidate = fn_name_generated + token_str
+
+                is_prefix = any(n.startswith(condidate) for n in valid_names)
+                is_exact = condidate in valid_names
+
+                if not is_prefix and not is_exact:
+                    logits[token_id] = -float('inf')
+                token_id += 1
+
+            if np.all(logits == -float('inf')):
+                pre_injected_token = model._tokenizer.encode("none")
+                input_ids += pre_injected_token
+                generated += pre_injected_token
+                next_token = model._tokenizer.encode("\"}")
+            else:
+                next_token = int(np.argmax(logits))
+
+            if next_token == eos_id:
+                break
+
+            input_ids.append(next_token)
+            generated.append(next_token)
+
+            token_str = model._tokenizer.decode(next_token)
+            generated_str = model._tokenizer.decode(generated, skip_special_tokens=True)
+            print(generated_str)
+            print(token_str)
+
+            if (generated_str.count('{') > 0 and
+               generated_str.count('}') >= generated_str.count('{')):
+                break
+
+            if state == 1:
+                fn_name_generated += token_str
+                if fn_name_generated in valid_names:
+                    pre_injected_token = model._tokenizer.encode("\"}")
+                    input_ids += pre_injected_token
+                    generated += pre_injected_token
+                    state = 0
+
+        return json.loads(generated_str)
+
+
+# generate function parameter base on function name that selected by ConstrainedFnGenerator
+class ConstrainedParGenerator(BaseModel):
+    def generate(self, model: Small_LLM_Model, prompt: str, function_name: str, registry: ToolRegistry, max_new_tokens: int = 200) -> Dict[str, Any]:
+        prompt = registry.build_param_prompt(prompt, function_name)
+        for fn in registry.tools:
+            if fn["name"] == function_name:
+                valid_parameters = list(fn["parameters"].keys())
+
+        input_ids = model._tokenizer.encode(prompt, add_special_tokens=True)
+        eos_id = model._tokenizer.eos_token_id
+        generated = model._tokenizer.encode("{\"parameters\": {\"")
+        input_ids += (generated)
+
+        state = 0
+        parameter_name = ""
+
+        for i in range(max_new_tokens):
+            logits = np.array(model.get_logits_from_input_ids(input_ids))
+            token_id = 0
+            while (state == 0 and token_id < len(logits)):
+                token_str = model._tokenizer.decode([token_id])
+                condidate = parameter_name + token_str
+
+                is_prefix = any(n.startswith(condidate) for n in valid_parameters)
+                is_exact = condidate in valid_parameters
+
+                if not is_prefix and not is_exact:
+                    logits[token_id] = -float('inf')
+
+                token_id += 1
+
+            if np.all(logits == -float('inf')):
+                if state == 0:
+                    next_token = model._tokenizer.encode("}}")[0]
+            else:
+                next_token = int(np.argmax(logits))
+
+            token_str = model._tokenizer.decode(next_token, skip_special_tokens=True)
+            print(token_str)
+            print(valid_parameters)
+
+
+
+            if state != 1 or not "," in token_str or len(valid_parameters) != 0:
+                input_ids.append(next_token)
+                generated.append(next_token)
+
+            if state == 0:
+                parameter_name += token_str
+                if parameter_name in valid_parameters:
+                    pre_injected_token_str = "\": "
+                    pre_injected_token = model._tokenizer.encode("\": ")
+                    input_ids += pre_injected_token
+                    generated += pre_injected_token
+                    valid_parameters.remove(parameter_name)
+                    parameter_name = ""
+                    state = 1
+            elif state == 1 and "," in token_str:
+                    if len(valid_parameters) == 0:
+                        if token_str.startswith("\""):
+                            input_ids += model._tokenizer.encode("\"")
+                            generated += model._tokenizer.encode("\"")
+                        input_ids += model._tokenizer.encode("}}")
+                        generated += model._tokenizer.encode("}}")
+                    else:
+                        input_ids += model._tokenizer.encode(" \"")
+                        generated += model._tokenizer.encode(" \"")
+                    state = 0
+
+            generated_str = model._tokenizer.decode(generated, skip_special_tokens=True)
+            if (generated_str.count('{') > 0 and
+               generated_str.count('}') >= generated_str.count('{')):
+                break
+            print(state)
+            print(token_str)
+            print(generated_str)
+
+        print(generated_str)
+        return json.loads(generated_str)
