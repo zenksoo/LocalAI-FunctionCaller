@@ -109,8 +109,8 @@ def render_prompts_stat(prompts: List[str],
 
 
 def get_msg_template(color: str) -> Callable:
-    availble_templates = [BG_CYAN, BG_YELLOW, BG_GREEN, BG_MAGENTA, BG_WHITE]
-    availble_colors = ["cyan", "yellow", "green", "magenta", "white"]
+    availble_templates = [BG_CYAN, BG_YELLOW, BG_GREEN, BG_MAGENTA, BG_WHITE, BG_RED]
+    availble_colors = ["cyan", "yellow", "green", "magenta", "white", "red"]
     try:
         template = availble_templates[availble_colors.index(color)]
         return (

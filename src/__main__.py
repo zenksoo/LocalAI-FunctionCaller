@@ -1,4 +1,4 @@
-from src.generation_core import Config, ToolRegistry, ConstrainedGenerator, ConstrainedFnGenerator, ConstrainedParGenerator
+from src.generation_core import Config, ToolRegistry, ConstrainedFnGenerator, ConstrainedParGenerator
 from src.rendering import (get_error_handler, get_msg_template,
                            render_prompts_stat)
 from typing import List, Dict, Any
@@ -26,8 +26,6 @@ if __name__ == "__main__":
     config = Config.load()
     registry = ToolRegistry(tools=config.tools)
 
-    constrained_gen = ConstrainedGenerator()
-
     constrained_fn_gen = ConstrainedFnGenerator()
     constrained_parm_gen = ConstrainedParGenerator()
     model = Small_LLM_Model()
@@ -36,46 +34,46 @@ if __name__ == "__main__":
     passed_prompts: List[bool] = []
 
     start = time.perf_counter()
-    for prompt in config.prompts:
-        response: Dict[str, str] = {}
+    try:
+        for prompt in config.prompts:
+            response: Dict[str, str] = {}
 
-        # print(RESET_TERMINAL)
+            print(RESET_TERMINAL)
+            render_configuration(config)
+            render_prompts_stat(config.prompts, passed_prompts)
+            get_msg_template("green")("PROMPT", prompt)
+            try:
+                response["prompt"] = prompt
+                response.update(constrained_fn_gen.generate(model, prompt, registry))
+                if response["name"] == "none":
+                    response["parameters"] = "none"
+                else:
+                    response.update(
+                        constrained_parm_gen.generate(model, prompt, response["name"], registry))
+                passed_prompts.append(True)
+            except KeyboardInterrupt:
+                response["prompt"] = prompt
+                response["error"] = "Skip Generating"
+                passed_prompts.append(False)
+            results.append(response)
+
+        print(RESET_TERMINAL)
         render_configuration(config)
         render_prompts_stat(config.prompts, passed_prompts)
-        get_msg_template("green")("PROMPT", prompt)
+
+        end = time.perf_counter()
+        exuction_time = (end - start) / 60
+        with open("excution_time.txt", 'a') as f:
+            f.write(f"{exuction_time:.6f}\n")
         try:
-            response["prompt"] = prompt
-            response.update(constrained_fn_gen.generate(model, prompt, registry))
-            if response["name"] == "none":
-                response["parameters"] = "none"
-            else:
-                response.update(constrained_parm_gen.generate(model, prompt, response["name"], registry))
-            print(f"the response is {response}")
-            # response = constrained_gen.generate(model, prompt, registry)
-            passed_prompts.append(True)
-        except KeyboardInterrupt:
-            response["prompt"] = prompt
-            response["error"] = "Skip Generating"
-            passed_prompts.append(False)
-        results.append(response)
-
-    # print(RESET_TERMINAL)
-    render_configuration(config)
-    render_prompts_stat(config.prompts, passed_prompts)
-
-    end = time.perf_counter()
-    exuction_time = (end - start) / 60
-    with open("excution_time.txt", 'w') as f:
-        f.write(f"{exuction_time:.6f}")
-    try:
-        config.write_results(results)
-        get_msg_template("green")(
-            "[+] All DONE and SAVED", "")
-    except (PermissionError, IOError) as e:
+            config.write_results(results)
+            get_msg_template("green")(
+                "[+] All DONE and SAVED", "")
+        except (PermissionError, IOError) as e:
+            render_exception(e)
+    except SystemExit:
+        pass
+    except (BaseException, KeyboardInterrupt) as e:
         render_exception(e)
-    # except SystemExit:
-    #     pass
-    # except (BaseException, KeyboardInterrupt) as e:
-    #     render_exception(e)
-    #     sys.exit(1)
+        sys.exit(1)
     sys.exit(0)

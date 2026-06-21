@@ -114,12 +114,12 @@ Response:
         """
 
 
+
     def build_param_prompt(self, user_request: str, function_name: str) -> str:
         def function_with_parameters() -> Dict[str, str]:
             return {function_name: e["parameters"] for e in self.tools if e["name"] == function_name}
 
         available_functions = function_with_parameters()
-        print(available_functions)
         return f"""you are function parameter generator
 
 chosen function parameter:
@@ -156,53 +156,6 @@ User request:
 Response:
         """
 
-    def build_prompt(self, user_request: str) -> str:
-        tools_json = json.dumps(self.tools, indent=2)
-        return f"""You are a function-calling assistant. \
-Given a user request, pick the best function \
-and return ONLY a JSON object — no explanation, no markdown, no extra text.
-
-Available functions:
-{tools_json}
-
-Rules for filling parameters:
-- Regex character classes MUST be wrapped in square brackets: [abc] not abc
-- NEVER use the English word for a symbol — always use the symbol itself
-- "replace","substitute","swap","change","convert" all mean the same operation
-
-Examples for filling parameters:
-request: Replace all numbers in "hi 42 bye" with NUM
-response: {{"function": "fn_substitute_string_with_regex", "parameters": \
-    {{"source_string": "hi 42 bye", "regex": "[0-9]+", "replacement": "NUM"}}}}
-
-request: Replace vowels in "hello world" with asterisks
-response: {{"function": "fn_substitute_string_with_regex", "parameters": \
-    {{\
-        "source_string": "hello world", \
-        "regex": "[aeiouAEIOU]", "replacement": "*"}}}}
-
-request: Replace 'cat' with 'dog' in "the cat sat"
-response: {{"function": "fn_substitute_string_with_regex", "parameters": \
-    {{\
-        "source_string": "the cat sat", \
-        "regex": "cat", "replacement": "dog"}}}}
-
-request: Substitute all spaces in "hello world foo" with dashes
-response: {{"function": "fn_substitute_string_with_regex", "parameters": \
-{{"source_string": "hello world foo", "regex": "[ ]+", "replacement": "-"}}}}
-
-Output format (strictly): \
-{{"function": "<function_name>", "parameters": {{<key>: <value>, ...}}}}
-
-If no function description matches the user request the functino name will \
-    be 'none' and return exactly: \
-{{"function": "none", "parameters": {{}}}}
-
-User request:
-    {user_request}
-Response:
-"""
-
     def get_valid_names(self) -> List[str]:
         return [t["name"] for t in self.tools]
 
@@ -212,170 +165,27 @@ Response:
         return {key: list(val.keys()) for key, val in zip(fn_names, fn_para)}
 
 
-class ConstrainedGenerator(BaseModel):
-    def generate(self, model: Small_LLM_Model, prompt: str,
-                 registry: ToolRegistry, with_animation: bool = True,
-                 max_new_tokens: int = 200) -> Dict[str, str]:
-
-        prompt = registry.build_prompt(prompt)
-        valid_names = registry.get_valid_names()
-        valid_names.append("none")
-        valid_parameters = registry.get_valid_parameters()
-
-        input_ids = model._tokenizer.encode(prompt, add_special_tokens=False)
-        eos_id = model._tokenizer.eos_token_id
-
-        generated: List[int] = model._tokenizer.encode(
-            "{\"function\": \"", add_special_tokens=False)
-        input_ids += generated
-
-        state = 0
-        fn_name_generated: str = ""
-
-        parameters: List[str] = []
-        parameter_name: str = ""
-
-        pre_injected_token_str: str = "{\"function\": \""
-
-        print(SAVE_CURSOR_POSITION)
-
-        for i in range(max_new_tokens):
-            logits = np.array(model.get_logits_from_input_ids(input_ids))
-            token_id = 0
-            while (state == 0 and token_id < len(logits)):
-                token_str = model._tokenizer.decode([token_id])
-                condidate = fn_name_generated + token_str
-
-                is_prefix = any(n.startswith(condidate) for n in valid_names)
-                is_exact = condidate in valid_names
-
-                if not is_prefix and not is_exact:
-                    logits[token_id] = -float('inf')
-                token_id += 1
-
-            while (state == 1 and token_id < len(logits)):
-                token_str = model._tokenizer.decode([token_id])
-                condidate = parameter_name + token_str
-                fname = fn_name_generated
-                is_prefix = any(
-                    n.startswith(condidate) for n in valid_parameters[fname])
-                is_exact = condidate in valid_parameters[fn_name_generated]
-
-                if not is_prefix and not is_exact:
-                    logits[token_id] = -float('inf')
-                token_id += 1
-
-            if np.all(logits == -float('inf')):
-                if state == 0:
-                    pre_injected_token_str = "\"}"
-                    pre_injected_token = model._tokenizer.encode("\"}")
-                    input_ids += pre_injected_token
-                    generated += pre_injected_token
-                    break
-                else:
-                    next_token = model._tokenizer.encode("}}")[0]
-            else:
-                next_token = int(np.argmax(logits))
-
-            if next_token == eos_id:
-                break
-
-            token_str = model._tokenizer.decode(
-                [next_token], skip_special_tokens=True)
-
-            input_ids.append(next_token)
-            generated.append(next_token)
-
-            generated_str = model._tokenizer.decode(
-                generated, skip_special_tokens=True)
-            if with_animation:
-                print(TO_SAVED_POSITION, CLEAR_DOWN)
-                render_progress_bar(i)
-                get_msg_template("cyan")("LLM TOKEN   ", f"'{token_str}'")
-
-            if (generated_str.count('{') > 0 and
-               generated_str.count('}') >= generated_str.count('{')):
-                break
-
-            if state == 0:
-                fn_name_generated += token_str
-                if fn_name_generated in valid_names:
-                    if fn_name_generated == "none":
-                        pre_injected_token_str = "\"}"
-                        pre_injected_token = model._tokenizer.encode("\"}")
-                        input_ids += pre_injected_token
-                        generated += pre_injected_token
-                        break
-                    pre_injected_token_str = "\", \"parameters\": {"
-                    pre_injected_token = model._tokenizer.encode(
-                        pre_injected_token_str)
-                    if len(valid_parameters[fn_name_generated]) > 0:
-                        pre_injected_token_str = "\""
-                        pre_injected_token += model._tokenizer.encode(
-                            pre_injected_token_str
-                        )
-                    input_ids += pre_injected_token
-                    generated += pre_injected_token
-                    state = 1
-
-            elif state == 1:
-                parameter_name += token_str
-                if parameter_name in valid_parameters[fn_name_generated]:
-                    pre_injected_token_str = "\": "
-                    pre_injected_token = model._tokenizer.encode("\": ")
-                    input_ids += pre_injected_token
-                    generated += pre_injected_token
-                    parameters.append(parameter_name)
-                    parameter_name = ""
-                    state = 2
-
-            elif state == 2:
-                if "," in token_str:
-                    input_ids += model._tokenizer.encode(" \"")
-                    generated += model._tokenizer.encode(" \"")
-                    state = 1
-
-            if with_animation:
-                get_msg_template("green")(
-                    "Per Injected", f"'{pre_injected_token_str}'")
-                get_msg_template("yellow")("Response    ", generated_str)
-                pre_injected_token_str = ""
-
-        generated_str = model._tokenizer.decode(
-            generated, skip_special_tokens=True)
-        json_generated = json.loads(generated_str)
-        result = {"prompt": ""}
-
-        if fn_name_generated != "none" and fn_name_generated in valid_names:
-            result["name"] = json_generated["function"]
-            if parameters == valid_parameters[fn_name_generated]:
-                result["parameters"] = json_generated["parameters"]
-            else:
-                result["parameters"] = "none"
-        else:
-            result["name"] = "none"
-
-        return result
-
-
-
 # generate function name for the given prompt
 class ConstrainedFnGenerator(BaseModel):
     def generate(self, model: Small_LLM_Model,
-                 prompt: str, registry: ToolRegistry,
+                 prompt: str, registry: ToolRegistry, with_animation: bool = True,
                  max_new_tokens: int = 200) -> dict[str: Any]:
         prompt = registry.build_fn_prompt(prompt)
         valid_names = registry.get_valid_names()
         valid_names.append("none")
 
         input_ids = model._tokenizer.encode(prompt, add_special_tokens=False)
-        eos_id = model._tokenizer.eos_token_id
         generated = model._tokenizer.encode("{\"name\": \"")
 
         input_ids += generated
 
         state = 1
         fn_name_generated: str = ""
+        pre_injected_token_str = "{\"name\"}: \""
+
+        if with_animation:
+            get_msg_template("red")("STEP 1", "Function name Generation")
+            print(SAVE_CURSOR_POSITION)
 
 
         for i in range(max_new_tokens):
@@ -400,16 +210,21 @@ class ConstrainedFnGenerator(BaseModel):
             else:
                 next_token = int(np.argmax(logits))
 
-            if next_token == eos_id:
-                break
-
             input_ids.append(next_token)
             generated.append(next_token)
 
             token_str = model._tokenizer.decode(next_token)
+            if with_animation:
+                print(TO_SAVED_POSITION, CLEAR_DOWN)
+                render_progress_bar(i)
+                get_msg_template("cyan")("LLM TOKEN   ", f"'{token_str}'")
             generated_str = model._tokenizer.decode(generated, skip_special_tokens=True)
-            print(generated_str)
-            print(token_str)
+            if with_animation:
+                get_msg_template("green")(
+                    "Per Injected", f"'{pre_injected_token_str}'")
+                get_msg_template("yellow")("Response    ", generated_str)
+                pre_injected_token_str = ""
+
 
             if (generated_str.count('{') > 0 and
                generated_str.count('}') >= generated_str.count('{')):
@@ -423,24 +238,32 @@ class ConstrainedFnGenerator(BaseModel):
                     generated += pre_injected_token
                     state = 0
 
+        if with_animation:
+            print(TO_SAVED_POSITION, CLEAR_DOWN)
+            get_msg_template("yellow")("Step Result", generated_str)
         return json.loads(generated_str)
 
 
 # generate function parameter base on function name that selected by ConstrainedFnGenerator
 class ConstrainedParGenerator(BaseModel):
-    def generate(self, model: Small_LLM_Model, prompt: str, function_name: str, registry: ToolRegistry, max_new_tokens: int = 200) -> Dict[str, Any]:
+    def generate(self, model: Small_LLM_Model, prompt: str, function_name: str, registry: ToolRegistry, with_animation: bool = True, max_new_tokens: int = 200) -> Dict[str, Any]:
         prompt = registry.build_param_prompt(prompt, function_name)
+        valid_parameters: List = []
         for fn in registry.tools:
             if fn["name"] == function_name:
                 valid_parameters = list(fn["parameters"].keys())
 
         input_ids = model._tokenizer.encode(prompt, add_special_tokens=True)
-        eos_id = model._tokenizer.eos_token_id
         generated = model._tokenizer.encode("{\"parameters\": {\"")
         input_ids += (generated)
 
         state = 0
         parameter_name = ""
+        pre_injected_token_str = "{\"parameters\": {\""
+
+        if with_animation:
+            get_msg_template("red")("STEP 2", "Function Parameters Generation")
+            print(SAVE_CURSOR_POSITION)
 
         for i in range(max_new_tokens):
             logits = np.array(model.get_logits_from_input_ids(input_ids))
@@ -464,10 +287,10 @@ class ConstrainedParGenerator(BaseModel):
                 next_token = int(np.argmax(logits))
 
             token_str = model._tokenizer.decode(next_token, skip_special_tokens=True)
-            print(token_str)
-            print(valid_parameters)
-
-
+            if with_animation:
+                print(TO_SAVED_POSITION, CLEAR_DOWN)
+                render_progress_bar(i)
+                get_msg_template("cyan")("LLM TOKEN   ", f"'{token_str}'")
 
             if state != 1 or not "," in token_str or len(valid_parameters) != 0:
                 input_ids.append(next_token)
@@ -475,6 +298,7 @@ class ConstrainedParGenerator(BaseModel):
 
             if state == 0:
                 parameter_name += token_str
+
                 if parameter_name in valid_parameters:
                     pre_injected_token_str = "\": "
                     pre_injected_token = model._tokenizer.encode("\": ")
@@ -483,11 +307,13 @@ class ConstrainedParGenerator(BaseModel):
                     valid_parameters.remove(parameter_name)
                     parameter_name = ""
                     state = 1
+
             elif state == 1 and "," in token_str:
                     if len(valid_parameters) == 0:
                         if token_str.startswith("\""):
                             input_ids += model._tokenizer.encode("\"")
                             generated += model._tokenizer.encode("\"")
+
                         input_ids += model._tokenizer.encode("}}")
                         generated += model._tokenizer.encode("}}")
                     else:
@@ -495,13 +321,19 @@ class ConstrainedParGenerator(BaseModel):
                         generated += model._tokenizer.encode(" \"")
                     state = 0
 
+
+
             generated_str = model._tokenizer.decode(generated, skip_special_tokens=True)
+            if with_animation:
+                get_msg_template("green")(
+                    "Per Injected", f"'{pre_injected_token_str}'")
+                get_msg_template("yellow")("Response    ", generated_str)
+                pre_injected_token_str = ""
             if (generated_str.count('{') > 0 and
                generated_str.count('}') >= generated_str.count('{')):
-                break
-            print(state)
-            print(token_str)
-            print(generated_str)
+               break
 
-        print(generated_str)
+        if with_animation:
+            print(TO_SAVED_POSITION, CLEAR_DOWN)
+            get_msg_template("yellow")("Step Result", generated_str)
         return json.loads(generated_str)

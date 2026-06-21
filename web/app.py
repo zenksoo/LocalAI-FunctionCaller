@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 from llm_sdk import Small_LLM_Model
-from src import ConstrainedGenerator, ToolRegistry
+from src import ConstrainedFnGenerator, ConstrainedParGenerator, ToolRegistry
 import json
 from typing import Dict, Any
 import math
@@ -57,12 +57,24 @@ def index() -> Any:
 def generate_llm_response() -> Any:
     with open('data/input/functions_definition.json', 'r') as f:
         tools = json.loads(f.read())
+
     model = Small_LLM_Model()
     registry = ToolRegistry(tools=tools)
-    constrained_gen = ConstrainedGenerator()
+
+    fn_constrained_gen = ConstrainedFnGenerator()
+    parm_constrained_gen = ConstrainedParGenerator()
+
     data = request.get_json()
     prompt = data.get('prompt')
-    res = constrained_gen.generate(model, prompt, registry, False)
+
+    res: Dict[str, str] = {"prompt": prompt}
+
+    res.update(fn_constrained_gen.generate(model, prompt, registry, False))
+    if (res["name"] == "none"):
+        res["parameters"] = "none"
+    else:
+        res.update(parm_constrained_gen.generate(model, prompt, res["name"], registry, False))
+
     call_result = call_right_implementation(res)
     res["prompt"] = prompt
     response: Dict = {}
