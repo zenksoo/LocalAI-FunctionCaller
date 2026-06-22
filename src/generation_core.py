@@ -101,11 +101,13 @@ class ToolRegistry(BaseModel):
         available_functions = function_with_description()
         return f"""You are a function-calling assistant. \
 Given a user request, pick the best function \
-and return ONLY a JSON object of the right function name and none if no function matche the user request
+and return ONLY a JSON object of the right function name \
+and none if no function matche the user request
 Available functions:
     {available_functions}
 
-If no function description matches the user request the functino name will be 'none'
+If no function description matches the user request the functino\
+ name will be 'none'
 
 User request:
     {user_request}
@@ -113,11 +115,11 @@ User request:
 Response:
         """
 
-
-
     def build_param_prompt(self, user_request: str, function_name: str) -> str:
         def function_with_parameters() -> Dict[str, str]:
-            return {function_name: e["parameters"] for e in self.tools if e["name"] == function_name}
+            return {
+                function_name: e["parameters"]
+                for e in self.tools if e["name"] == function_name}
 
         available_functions = function_with_parameters()
         return f"""you are function parameter generator
@@ -168,8 +170,9 @@ Response:
 # generate function name for the given prompt
 class ConstrainedFnGenerator(BaseModel):
     def generate(self, model: Small_LLM_Model,
-                 prompt: str, registry: ToolRegistry, with_animation: bool = True,
-                 max_new_tokens: int = 200) -> dict[str: Any]:
+                 prompt: str, registry: ToolRegistry,
+                 with_animation: bool = True,
+                 max_new_tokens: int = 200) -> Any:
         prompt = registry.build_fn_prompt(prompt)
         valid_names = registry.get_valid_names()
         valid_names.append("none")
@@ -186,7 +189,6 @@ class ConstrainedFnGenerator(BaseModel):
         if with_animation:
             get_msg_template("red")("STEP 1", "Function name Generation")
             print(SAVE_CURSOR_POSITION)
-
 
         for i in range(max_new_tokens):
             logits = np.array(model.get_logits_from_input_ids(input_ids))
@@ -218,13 +220,13 @@ class ConstrainedFnGenerator(BaseModel):
                 print(TO_SAVED_POSITION, CLEAR_DOWN)
                 render_progress_bar(i)
                 get_msg_template("cyan")("LLM TOKEN   ", f"'{token_str}'")
-            generated_str = model._tokenizer.decode(generated, skip_special_tokens=True)
+            generated_str = model._tokenizer.decode(
+                generated, skip_special_tokens=True)
             if with_animation:
                 get_msg_template("green")(
                     "Per Injected", f"'{pre_injected_token_str}'")
                 get_msg_template("yellow")("Response    ", generated_str)
                 pre_injected_token_str = ""
-
 
             if (generated_str.count('{') > 0 and
                generated_str.count('}') >= generated_str.count('{')):
@@ -240,13 +242,17 @@ class ConstrainedFnGenerator(BaseModel):
 
         if with_animation:
             print(TO_SAVED_POSITION, CLEAR_DOWN)
-            get_msg_template("yellow")("Step Result", generated_str)
+            get_msg_template("yellow")("RESULT", generated_str)
         return json.loads(generated_str)
 
 
-# generate function parameter base on function name that selected by ConstrainedFnGenerator
+# generate function parameter base on function name that
+# selected by ConstrainedFnGenerator
 class ConstrainedParGenerator(BaseModel):
-    def generate(self, model: Small_LLM_Model, prompt: str, function_name: str, registry: ToolRegistry, with_animation: bool = True, max_new_tokens: int = 200) -> Dict[str, Any]:
+    def generate(self, model: Small_LLM_Model, prompt: str,
+                 function_name: str, registry: ToolRegistry,
+                 with_animation: bool = True,
+                 max_new_tokens: int = 200) -> Any:
         prompt = registry.build_param_prompt(prompt, function_name)
         valid_parameters: List = []
         for fn in registry.tools:
@@ -272,7 +278,8 @@ class ConstrainedParGenerator(BaseModel):
                 token_str = model._tokenizer.decode([token_id])
                 condidate = parameter_name + token_str
 
-                is_prefix = any(n.startswith(condidate) for n in valid_parameters)
+                is_prefix = any(
+                    n.startswith(condidate) for n in valid_parameters)
                 is_exact = condidate in valid_parameters
 
                 if not is_prefix and not is_exact:
@@ -286,13 +293,15 @@ class ConstrainedParGenerator(BaseModel):
             else:
                 next_token = int(np.argmax(logits))
 
-            token_str = model._tokenizer.decode(next_token, skip_special_tokens=True)
+            token_str = model._tokenizer.decode(
+                next_token, skip_special_tokens=True)
             if with_animation:
                 print(TO_SAVED_POSITION, CLEAR_DOWN)
                 render_progress_bar(i)
                 get_msg_template("cyan")("LLM TOKEN   ", f"'{token_str}'")
 
-            if state != 1 or not "," in token_str or len(valid_parameters) != 0:
+            if (state != 1 or "," not in token_str or
+               len(valid_parameters) != 0):
                 input_ids.append(next_token)
                 generated.append(next_token)
 
@@ -309,21 +318,20 @@ class ConstrainedParGenerator(BaseModel):
                     state = 1
 
             elif state == 1 and "," in token_str:
-                    if len(valid_parameters) == 0:
-                        if token_str.startswith("\""):
-                            input_ids += model._tokenizer.encode("\"")
-                            generated += model._tokenizer.encode("\"")
+                if len(valid_parameters) == 0:
+                    if token_str.startswith("\""):
+                        input_ids += model._tokenizer.encode("\"")
+                        generated += model._tokenizer.encode("\"")
 
-                        input_ids += model._tokenizer.encode("}}")
-                        generated += model._tokenizer.encode("}}")
-                    else:
-                        input_ids += model._tokenizer.encode(" \"")
-                        generated += model._tokenizer.encode(" \"")
-                    state = 0
+                    input_ids += model._tokenizer.encode("}}")
+                    generated += model._tokenizer.encode("}}")
+                else:
+                    input_ids += model._tokenizer.encode(" \"")
+                    generated += model._tokenizer.encode(" \"")
+                state = 0
 
-
-
-            generated_str = model._tokenizer.decode(generated, skip_special_tokens=True)
+            generated_str = model._tokenizer.decode(
+                generated, skip_special_tokens=True)
             if with_animation:
                 get_msg_template("green")(
                     "Per Injected", f"'{pre_injected_token_str}'")
@@ -331,9 +339,9 @@ class ConstrainedParGenerator(BaseModel):
                 pre_injected_token_str = ""
             if (generated_str.count('{') > 0 and
                generated_str.count('}') >= generated_str.count('{')):
-               break
+                break
 
         if with_animation:
             print(TO_SAVED_POSITION, CLEAR_DOWN)
-            get_msg_template("yellow")("Step Result", generated_str)
+            get_msg_template("yellow")("RESULT", generated_str)
         return json.loads(generated_str)

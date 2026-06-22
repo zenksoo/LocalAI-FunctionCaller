@@ -73,7 +73,8 @@ def generate_llm_response() -> Any:
     if (res["name"] == "none"):
         res["parameters"] = "none"
     else:
-        res.update(parm_constrained_gen.generate(model, prompt, res["name"], registry, False))
+        res.update(parm_constrained_gen.generate(
+            model, prompt, res["name"], registry, False))
 
     call_result = call_right_implementation(res)
     res["prompt"] = prompt

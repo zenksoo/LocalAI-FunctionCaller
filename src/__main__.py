@@ -1,4 +1,6 @@
-from src.generation_core import Config, ToolRegistry, ConstrainedFnGenerator, ConstrainedParGenerator
+from src.generation_core import (Config, ToolRegistry,
+                                 ConstrainedFnGenerator,
+                                 ConstrainedParGenerator)
 from src.rendering import (get_error_handler, get_msg_template,
                            render_prompts_stat)
 from typing import List, Dict, Any
@@ -44,12 +46,14 @@ if __name__ == "__main__":
             get_msg_template("green")("PROMPT", prompt)
             try:
                 response["prompt"] = prompt
-                response.update(constrained_fn_gen.generate(model, prompt, registry))
+                response.update(
+                    constrained_fn_gen.generate(model, prompt, registry))
                 if response["name"] == "none":
                     response["parameters"] = "none"
                 else:
                     response.update(
-                        constrained_parm_gen.generate(model, prompt, response["name"], registry))
+                        constrained_parm_gen.generate(
+                            model, prompt, response["name"], registry))
                 passed_prompts.append(True)
             except KeyboardInterrupt:
                 response["prompt"] = prompt
