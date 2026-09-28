@@ -44,14 +44,14 @@ def get_error_handler() -> Callable[[BaseException], None]:
 
     @_handle_by_type.register(ValidationError)
     def _(exc: ValidationError) -> None:
-        for error in exc.errors():
-            if error["type"] == "missing":
-                print(f"{BG_BLUE} {RESET} Missing",
-                      "Required Field:",
-                      f"{', '.join([e for e in error["loc"]])}",
-                      file=stderr)
-            else:
-                print(f"{BG_BLUE} {RESET} {error["msg"]}", file=stderr)
+        print(exc)
+        # for error in exc.errors():
+        #     if error["type"] == "missing":
+        #         print(f"{BG_BLUE} {RESET} Missing",
+        #               "Required Field:",
+        #               file=stderr)
+        #     else:
+        #         print(f"{BG_BLUE} {RESET}", file=stderr)
 
     @_handle_by_type.register(JSONDecodeError)
     def _(exc: JSONDecodeError) -> None:
