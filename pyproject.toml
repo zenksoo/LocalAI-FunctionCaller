@@ -6,8 +6,8 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "llm-sdk",
-    "torch==2.0.0",
-    "transformers",
+    "torch==2.2.2",
+    "transformers>=4.45.0,<5.0.0",
     "flake8",
     "mypy",
     "numpy",
