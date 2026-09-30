@@ -59,8 +59,11 @@ def get_error_handler() -> Callable[[BaseException], None]:
         #     else:
         #         print(f"{BG_BLUE} {RESET}", file=stderr)
 
+
+
     @_handle_by_type.register(JSONDecodeError)
     def _(exc: JSONDecodeError) -> None:
+        
         print(f"{BG_BLUE} {RESET} Invalid",
               f"Formate For JSON File: {exc}\n", file=stderr)
 
