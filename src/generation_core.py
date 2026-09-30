@@ -191,27 +191,6 @@ Rules for filling parameters:
 - Regex character classes MUST be wrapped in square brackets: [abc] not abc
 - NEVER use the English word for a symbol — always use the symbol itself
 - "replace","substitute","swap","change","convert" all mean the same operation
-
-Examples for filling parameters:
-request: Replace all numbers in "hi 42 bye" with NUM
-response:{{"parameters": {{"source_string": "hi 42 bye",\
-    "regex": "[0-9]+", "replacement": "NUM"}}}}
-
-request: Replace vowels in "hello world" with asterisks
-response: {{"parameters": \
-    {{\
-        "source_string": "hello world", \
-        "regex": "[aeiouAEIOU]", "replacement": "*"}}}}
-
-request: Replace 'cat' with 'dog' in "the cat sat"
-response: {{"parameters": {{\
-        "source_string": "the cat sat", \
-        "regex": "cat", "replacement": "dog"}}}}
-
-request: Substitute all spaces in "hello world foo" with dashes
-response: {{"parameters": {{"source_string": "hello world foo",\
-"regex": "[ ]+", "replacement": "-"}}}}
-
 User request:
     {user_request}
 Response:
