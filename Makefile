@@ -72,13 +72,13 @@ lint:
 
 	@echo "$(BG_YELLOW)$(BLACK)  flake8  $(RESET)  $(YELLOW)$(ARROW) checking style...$(RESET)"
 	@sleep 0.3
-	@uv tool run flake8 src web && \
+	@uv run flake8 src web && \
 			echo "$(BG_GREEN) $(RESET)  $(GREEN)$(OK) flake8 passed$(RESET)" || \
 			(echo "$(BG_RED) $(RESET) $(RED)$(FAIL) flake8 failed$(RESET)"; exit 1)
 	@echo ""
 
 	@echo "$(BG_YELLOW)$(BLACK)  mypy    $(RESET)  $(YELLOW)$(ARROW) checking types...$(RESET)\n"
-	@uv tool run mypy . --warn-return-any        \
+	@uv run mypy . --warn-return-any        \
 	         --warn-unused-ignores   \
 	         --ignore-missing-imports \
 	         --disallow-untyped-defs \
