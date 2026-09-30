@@ -49,7 +49,9 @@ def fn_get_square_root(a: int) -> float:
 
 def fn_substitute_string_with_regex(source_string: str,
                                     regex: str, replacement: str) -> str:
-    """ Substitutes parts of a string that match a given regex pattern with a replacement string.
+    """
+    Substitutes parts of a string that match a given regex pattern with a
+    replacement string.
     Args:
         source_string (str): The original string.
         regex (str): The regex pattern to match.
@@ -59,10 +61,12 @@ def fn_substitute_string_with_regex(source_string: str,
     """
     return re.sub(regex, replacement, source_string)
 
+
 def call_right_implementation(data: Dict[str, Any]) -> Any:
     """ Calls the appropriate function based on the provided data.
     Args:
-        data (Dict[str, Any]): A dictionary containing the function name and parameters.
+        data (Dict[str, Any]): A dictionary containing the function name
+                                and parameters.
     Returns:
         Any: The result of the function call.
     """
@@ -87,9 +91,15 @@ def index() -> Any:
 
 @app.route('/api/chat', methods=['POST'])
 def generate_llm_response() -> Any:
-    """ Generates an LLM response based on the provided prompt.
+    """
+    Generates an LLM response based on the provided prompt.
 
-    This function reads the function definitions from a JSON file, initializes the LLM model and tool registry, and then processes the prompt received in the POST request. It generates a response using constrained function and parameter generators, calls the appropriate implementation based on the generated response, and returns a JSON response containing the original prompt, LLM response, and the result of the function call.
+    reads the function definitions from a JSON file, initializes
+    the LLM model and tool registry, and then processes the prompt received
+    in the POST request. It generates a response using constrained function
+    and parameter generators, calls the appropriate implementation based on the
+    generated response, and returns a JSON response containing the original
+    prompt, LLM response, and the result of the function call.
 
     Returns:
         Any: The generated LLM response.

@@ -61,10 +61,12 @@ class GenerationConfig(BaseModel):
             """ Gets the function definitions from a JSON file.
 
             Args:
-                fndef_path (str): Path to the JSON file containing function definitions.
+                fndef_path (str): Path to the JSON file containing function
+                                definitions.
 
             Returns:
-                List[Dict[str, Any]]: A list of dictionaries representing function definitions.
+                List[Dict[str, Any]]: A list of dictionaries representing
+                                    `function definitions.
             """
             fncs_definition: List[Dict[str, Any]] = []
             with open(fndef_path, 'r') as f:
@@ -99,18 +101,20 @@ class GenerationConfig(BaseModel):
         if not args.output:
             args.output = "data/output/function_calling_results.json"
 
-        return GenerationConfig(prompts=get_prompts(args.input),
-                      tools=get_functions_defschema(args.functions_definition),
-                      output_path=args.output,
-                      input_path=args.input,
-                      fn_definition_path=args.functions_definition)
+        return GenerationConfig(
+            prompts=get_prompts(args.input),
+            tools=get_functions_defschema(args.functions_definition),
+            output_path=args.output,
+            input_path=args.input,
+            fn_definition_path=args.functions_definition)
 
     def write_results(self, results: List[Dict[str, Any]]) -> None:
         """
         Writes the results to the specified output path in JSON format.
 
         Args:
-            results (List[Dict[str, Any]]): A list of dictionaries containing the results to be written.
+            results (List[Dict[str, Any]]): A list of dictionaries containing
+                                            the results to be written.
         """
 
         path = "/".join(self.output_path.split("/")[:-1])
@@ -124,10 +128,12 @@ class ToolRegistry(BaseModel):
     tools: List[Dict[str, Any]] = []
 
     def build_fn_prompt(self, user_request: str) -> str:
-        """ Builds a prompt for function name generation based on the user request.
+        """
+        Builds a prompt for function name generation based on the user request.
 
         Args:
-            user_request (str): The user request for which the function name needs to be generated.
+            user_request (str): The user request for which the function name
+                                needs to be generated.
 
         Returns:
             str: The generated prompt for function name generation.
@@ -153,17 +159,23 @@ Response:
         """
 
     def build_param_prompt(self, user_request: str, function_name: str) -> str:
-        """ Builds a prompt for function parameter generation based on the user request and function name.
+        """
+        Builds a prompt for function parameter generation based on
+        the user request and function name.
 
         Args:
-            user_request (str): The user request for which the function parameters need to be generated.
-            function_name (str): The name of the function for which the parameters need to be generated.
+            user_request (str): The user request for which the function
+                                parameters need to be generated.
+            function_name (str): The name of the function for which the
+                                parameters need to be generated.
 
         Returns:
             str: The generated prompt for function parameter generation.
         """
         def function_with_parameters() -> Dict[str, str]:
-            """ Returns a dictionary mapping function names to their parameters."""
+            """
+            Returns a dictionary mapping function names to their parameters.
+            """
             return {
                 function_name: e["parameters"]
                 for e in self.tools if e["name"] == function_name}
@@ -210,7 +222,10 @@ Response:
         return [t["name"] for t in self.tools]
 
     def get_valid_parameters(self) -> Dict[str, List[str]]:
-        """ Returns a dictionary mapping function names to their valid parameters."""
+        """
+        Returns a dictionary mapping function names to their valid
+        parameters.
+        """
         fn_names = self.get_valid_names()
         fn_para = [t["parameters"] for t in self.tools]
         return {key: list(val.keys()) for key, val in zip(fn_names, fn_para)}
@@ -223,19 +238,24 @@ class ConstrainedFnGenerator(BaseModel):
                  with_animation: bool = True,
                  max_new_tokens: int = 200) -> Any:
 
-        """ Generates a function name based on the given prompt using the provided model and registry.
+        """
+        Generates a function name based on the given prompt using the
+        provided model and registry.
 
         Args:
             model (Small_LLM_Model): The language model used for generation.
-            prompt (str): The user request for which the function name needs to be generated.
-            registry (ToolRegistry): The registry containing available functions and their details.
-            with_animation (bool, optional): Whether to display progress animation. Defaults to True.
-            max_new_tokens (int, optional): Maximum number of tokens to generate. Defaults to 200.
+            prompt (str): The user request for which the function name needs
+                          to be generated.
+            registry (ToolRegistry): The registry containing available
+                                     functions and their details.
+            with_animation (bool, optional): Whether to display progress
+                                             animation. Defaults to True.
+            max_new_tokens (int, optional): Maximum number of tokens to
+                                            generate. Defaults to 200.
 
         Returns:
             Any: The generated function name.
         """
-
 
         prompt = registry.build_fn_prompt(prompt)
         valid_names = registry.get_valid_names()
@@ -273,7 +293,15 @@ class ConstrainedFnGenerator(BaseModel):
                     logits[token_id] = -float('inf')
                 token_id += 1
 
-            # if all logits are -inf, it means the model cannot generate a valid token based on the constraints. In this case, we inject a token that represents "none" to indicate that no valid function name could be generated. We then append this token to both the input_ids and generated lists, and set the next_token to the token representing the closing brace of the JSON object. If there are valid logits, we select the token with the highest probability (argmax) as the next token to generate.
+            # if all logits are -inf, it means the model cannot generate a
+            # valid token based on the constraints. In this case, we inject
+            # a token that represents "none" to indicate that no valid
+            # function name could be generated. We then append this token
+            # to both the input_ids and generated lists, and set the
+            # next_token to the token representing the closing brace of the
+            # JSON object. If there are valid logits, we select the token
+            # with the highest probability (argmax) as the next
+            # token to generate.
             if np.all(logits == -float('inf')):
                 pre_injected_token = model._tokenizer.encode("none")
                 input_ids += pre_injected_token
@@ -327,15 +355,22 @@ class ConstrainedParGenerator(BaseModel):
                  with_animation: bool = True,
                  max_new_tokens: int = 200) -> Any:
 
-        """ Generates function parameters based on the given prompt and function name using the provided model and registry.
+        """
+        Generates function parameters based on the given prompt and
+        function name using the provided model and registry.
 
         Args:
             model (Small_LLM_Model): The language model used for generation.
-            prompt (str): The user request for which the function parameters need to be generated.
-            function_name (str): The name of the function for which the parameters need to be generated.
-            registry (ToolRegistry): The registry containing available functions and their details.
-            with_animation (bool, optional): Whether to display progress animation. Defaults to True.
-            max_new_tokens (int, optional): Maximum number of tokens to generate. Defaults to 200.
+            prompt (str): The user request for which the function parameters
+                          need to be generated.
+            function_name (str): The name of the function for which the
+                                 parameters need to be generated.
+            registry (ToolRegistry): The registry containing available
+                                     functions and their details.
+            with_animation (bool, optional): Whether to display progress
+                                             animation. Defaults to True.
+            max_new_tokens (int, optional): Maximum number of tokens to
+                                            generate. Defaults to 200.
 
         Returns:
             Any: The generated function parameters.

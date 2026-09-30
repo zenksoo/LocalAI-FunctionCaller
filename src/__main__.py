@@ -17,7 +17,8 @@ def render_configuration(config: GenerationConfig) -> None:
     Renders the configuration information.
 
     Args:
-        config (Config): The configuration object containing paths and settings.
+        config (Config): The configuration object
+                       containing paths and settings.
     """
     get_msg_template("white")(
                 "PATHS              ", "")
@@ -30,7 +31,11 @@ def render_configuration(config: GenerationConfig) -> None:
 
 
 if __name__ == "__main__":
-    """ Main entry point of the program. It initializes the configuration, model, and generators, and processes each prompt to generate function names and parameters. The results are saved to the specified output path.
+    """
+        Main entry point of the program. It initializes the configuration,
+        model, and generators, and processes each prompt to generate
+        function names and parameters. The results are saved to the
+        specified output path.
     """
     render_exception = get_error_handler()
     config = GenerationConfig.load()

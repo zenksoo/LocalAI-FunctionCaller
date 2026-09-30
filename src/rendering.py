@@ -38,10 +38,14 @@ FAIL = "✘"
 
 
 def get_error_handler() -> Callable[[BaseException], None]:
-    """ Returns a function that can handle different types of exceptions and display them in a formatted way.
+    """
+    Returns a function that can handle different types of exceptions and
+    display them in a formatted way.
 
     Returns:
-        Callable[[BaseException], None]: A function that takes an exception as input and prints a formatted error message to stderr.
+        Callable[[BaseException], None]: A function that takes an exception
+                                        as input and prints a formatted error
+                                        message to stderr.
     """
 
     @singledispatch
@@ -59,11 +63,9 @@ def get_error_handler() -> Callable[[BaseException], None]:
         #     else:
         #         print(f"{BG_BLUE} {RESET}", file=stderr)
 
-
-
     @_handle_by_type.register(JSONDecodeError)
     def _(exc: JSONDecodeError) -> None:
-        
+
         print(f"{BG_BLUE} {RESET} Invalid",
               f"Formate For JSON File: {exc}\n", file=stderr)
 
@@ -95,7 +97,8 @@ def render_progress_bar(i: int, items: int = 200,
     Args:
         i (int): The current iteration.
         items (int, optional): The total number of items. Defaults to 200.
-        bar_length (int, optional): The length of the progress bar. Defaults to 50.
+        bar_length (int, optional): The length of the progress bar. Defaults
+                                    to 50.
     """
     sys.stdout.write("\033[?25l")
 
@@ -117,7 +120,8 @@ def render_prompts_stat(prompts: List[str],
 
     Args:
         prompts (List[str]): The list of prompts.
-        passed_prompt (List[bool]): The list of boolean values indicating whether each prompt passed.
+        passed_prompt (List[bool]): The list of boolean values indicating
+                                    whether each prompt passed.
     """
     print(f"\n{BG_WHITE}{FG_BLACK}  PASSED PROMPTS       {RESET}    [ ",
           end="")
@@ -131,13 +135,15 @@ def render_prompts_stat(prompts: List[str],
 
 
 def get_msg_template(color: str) -> Callable:
-    """ Returns a function that prints a formatted message with a colored title.
+    """
+    Returns a function that prints a formatted message with a colored title.
 
     Args:
         color (str): The color of the title.
 
     Returns:
-        Callable: A function that takes a title and a message as arguments and prints a formatted message.
+        Callable: A function that takes a title and a message as arguments and
+                  prints a formatted message.
     """
     availble_templates = [
         BG_CYAN, BG_YELLOW, BG_GREEN, BG_MAGENTA, BG_WHITE, BG_RED]
