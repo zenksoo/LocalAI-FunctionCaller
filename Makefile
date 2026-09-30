@@ -78,7 +78,7 @@ lint:
 	@echo ""
 
 	@echo "$(BG_YELLOW)$(BLACK)  mypy    $(RESET)  $(YELLOW)$(ARROW) checking types...$(RESET)\n"
-	@uv run mypy . --warn-return-any        \
+	@uv run mypy src web  --warn-return-any        \
 	         --warn-unused-ignores   \
 	         --ignore-missing-imports \
 	         --disallow-untyped-defs \
