@@ -38,6 +38,12 @@ FAIL = "✘"
 
 
 def get_error_handler() -> Callable[[BaseException], None]:
+    """ Returns a function that can handle different types of exceptions and display them in a formatted way.
+
+    Returns:
+        Callable[[BaseException], None]: A function that takes an exception as input and prints a formatted error message to stderr.
+    """
+
     @singledispatch
     def _handle_by_type(error_type: BaseException) -> None:
         print(f"{BG_BLUE} {RESET} {error_type}")
@@ -81,6 +87,13 @@ def get_error_handler() -> Callable[[BaseException], None]:
 
 def render_progress_bar(i: int, items: int = 200,
                         bar_length: int = 50) -> None:
+    """ Renders a progress bar in the terminal.
+
+    Args:
+        i (int): The current iteration.
+        items (int, optional): The total number of items. Defaults to 200.
+        bar_length (int, optional): The length of the progress bar. Defaults to 50.
+    """
     sys.stdout.write("\033[?25l")
 
     percent = (i / items) * 100
@@ -97,6 +110,12 @@ def render_progress_bar(i: int, items: int = 200,
 
 def render_prompts_stat(prompts: List[str],
                         passed_prompt: List[bool]) -> None:
+    """ Renders the status of prompts in the terminal.
+
+    Args:
+        prompts (List[str]): The list of prompts.
+        passed_prompt (List[bool]): The list of boolean values indicating whether each prompt passed.
+    """
     print(f"\n{BG_WHITE}{FG_BLACK}  PASSED PROMPTS       {RESET}    [ ",
           end="")
     for e in passed_prompt:
@@ -109,6 +128,14 @@ def render_prompts_stat(prompts: List[str],
 
 
 def get_msg_template(color: str) -> Callable:
+    """ Returns a function that prints a formatted message with a colored title.
+
+    Args:
+        color (str): The color of the title.
+
+    Returns:
+        Callable: A function that takes a title and a message as arguments and prints a formatted message.
+    """
     availble_templates = [
         BG_CYAN, BG_YELLOW, BG_GREEN, BG_MAGENTA, BG_WHITE, BG_RED]
     availble_colors = ["cyan", "yellow", "green", "magenta", "white", "red"]

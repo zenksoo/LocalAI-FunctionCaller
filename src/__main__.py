@@ -1,4 +1,4 @@
-from src.generation_core import (Config, ToolRegistry,
+from src.generation_core import (GenerationConfig, ToolRegistry,
                                  ConstrainedFnGenerator,
                                  ConstrainedParGenerator)
 from src.rendering import (get_error_handler, get_msg_template,
@@ -12,7 +12,13 @@ import time
 RESET_TERMINAL = "\033[H\033[J"
 
 
-def render_configuration(config: Config) -> None:
+def render_configuration(config: GenerationConfig) -> None:
+    """
+    Renders the configuration information.
+
+    Args:
+        config (Config): The configuration object containing paths and settings.
+    """
     get_msg_template("white")(
                 "PATHS              ", "")
     get_msg_template("magenta")(
@@ -24,8 +30,10 @@ def render_configuration(config: Config) -> None:
 
 
 if __name__ == "__main__":
+    """ Main entry point of the program. It initializes the configuration, model, and generators, and processes each prompt to generate function names and parameters. The results are saved to the specified output path.
+    """
     render_exception = get_error_handler()
-    config = Config.load()
+    config = GenerationConfig.load()
     registry = ToolRegistry(tools=config.tools)
 
     constrained_fn_gen = ConstrainedFnGenerator()

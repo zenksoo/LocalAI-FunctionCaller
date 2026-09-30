@@ -13,27 +13,59 @@ CORS(app)
 
 
 def fn_add_numbers(a: int, b: int) -> int:
+    """ Adds two numbers and returns the result."""
     return a + b
 
 
 def fn_greet(name: str) -> str:
+    """ Greets a person with their name.
+    Args:
+        name (str): The name of the person to greet.
+    Returns:
+        str: A greeting message.
+    """
     return f"Hello, {name}"
 
 
 def fn_reverse_string(s: str) -> str:
+    """ Reverses a given string.
+    Args:
+        s (str): The string to be reversed.
+    Returns:
+        str: The reversed string.
+    """
     return s[::-1]
 
 
 def fn_get_square_root(a: int) -> float:
+    """ Calculates the square root of a given number.
+    Args:
+        a (int): The number to calculate the square root of.
+    Returns:
+        float: The square root of the number.
+    """
     return math.sqrt(a)
 
 
 def fn_substitute_string_with_regex(source_string: str,
                                     regex: str, replacement: str) -> str:
+    """ Substitutes parts of a string that match a given regex pattern with a replacement string.
+    Args:
+        source_string (str): The original string.
+        regex (str): The regex pattern to match.
+        replacement (str): The string to replace matches with.
+    Returns:
+        str: The modified string after substitution.
+    """
     return re.sub(regex, replacement, source_string)
 
-
 def call_right_implementation(data: Dict[str, Any]) -> Any:
+    """ Calls the appropriate function based on the provided data.
+    Args:
+        data (Dict[str, Any]): A dictionary containing the function name and parameters.
+    Returns:
+        Any: The result of the function call.
+    """
     if data["name"] == "fn_add_numbers":
         return fn_add_numbers(**data["parameters"])
     elif data["name"] == "fn_greet":
@@ -55,6 +87,13 @@ def index() -> Any:
 
 @app.route('/api/chat', methods=['POST'])
 def generate_llm_response() -> Any:
+    """ Generates an LLM response based on the provided prompt.
+
+    This function reads the function definitions from a JSON file, initializes the LLM model and tool registry, and then processes the prompt received in the POST request. It generates a response using constrained function and parameter generators, calls the appropriate implementation based on the generated response, and returns a JSON response containing the original prompt, LLM response, and the result of the function call.
+
+    Returns:
+        Any: The generated LLM response.
+    """
     with open('data/input/functions_definition.json', 'r') as f:
         tools = json.loads(f.read())
 
