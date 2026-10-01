@@ -205,70 +205,30 @@ Response:
 # Response:
 #         """
 
-#         return f"""Extract the arguments for ONE function call from the user request.
-# Output a single JSON object containing the parameter values. Nothing else.
+        return f"""Extract the arguments for ONE function call from the user request.
+Output a single JSON object containing the parameter values. Nothing else.
 
-# Function: {function_name}
-# Description: {function_description}
-# Parameters:
-# {function_parameters}
-
-# Rules:
-# 1. Output exactly the parameters listed above: same names, none missing, no extras.
-# 2. Match the types: string -> JSON string, number -> JSON number (no quotes),
-#    integer -> whole number, boolean -> true or false.
-# 3. Copy values from the request exactly (spelling, case, spacing).
-#    Never translate, correct, or invent values.
-# 4. Symbols: write the symbol itself, never its name.
-#    "asterisk" -> "*", "dollar sign" -> "$", "dot" -> ".", "dash" -> "-"
-# 5. Regex: always use square-bracket character classes, never backslash shortcuts.
-#    digits -> [0-9]+   letters -> [a-zA-Z]+   vowels -> [aeiouAEIOU]
-#    a space -> [ ]
-# 6. "replace", "substitute", "swap", "change", "convert" all mean replace.
-#    The text to find is the regex. The new text is the replacement.
-# 7. Numbers allways float when number is int like 8 convert it to 8.0
-# Request: {user_request}
-# Output: """
-
-        return f"""You extract arguments for one selected function.
-
-The user request is:
-{user_request}
-
-Selected function:
-{function_name}
-
-Function description:
-{function_description}
-
-Required parameters and types:
-{json.dumps(function_parameters, indent=2)}
-
-The decoder has already started the JSON output with:
-{{"parameters": {{
+Function: {function_name}
+Description: {function_description}
+Parameters:
+{function_parameters}
 
 Rules:
-1. Generate values only for the parameters listed above.
-2. Use every parameter exactly once, with the exact parameter name.
-3. Do not add, remove, rename, or reorder parameters.
-4. Match each declared JSON type exactly:
-   - string -> JSON string
-   - number -> JSON number
-   - integer -> JSON integer
-   - boolean -> true or false
-5. Copy values from the user request exactly. Preserve spelling, case,
-   spaces, punctuation, and special characters.
-6. Do not explain your answer.
-7. Do not output Markdown or code fences.
-8. Do not output the function name.
-9. Do not output the opening JSON object; it is already provided.
-10. Finish with valid JSON-compatible values only.
-
-User request:
-{user_request}
-
-Continue the parameters object now.
-"""
+1. Output exactly the parameters listed above: same names, none missing, no extras.
+2. Match the types: string -> JSON string, number -> JSON number (no quotes),
+   integer -> whole number, boolean -> true or false.
+3. Copy values from the request exactly (spelling, case, spacing).
+   Never translate, correct, or invent values.
+4. Symbols: write the symbol itself, never its name.
+   "asterisk" -> "*", "dollar sign" -> "$", "dot" -> ".", "dash" -> "-"
+5. Regex: always use square-bracket character classes, never backslash shortcuts.
+   digits -> [0-9]+   letters -> [a-zA-Z]+   vowels -> [aeiouAEIOU]
+   a space -> [ ]
+6. "replace", "substitute", "swap", "change", "convert" all mean replace.
+   The text to find is the regex. The new text is the replacement.
+7. Numbers allways float when number is int like 8 convert it to 8.0
+Request: {user_request}
+Output: """
 
     def get_valid_names(self) -> List[str]:
         """ Returns a list of valid function names."""
