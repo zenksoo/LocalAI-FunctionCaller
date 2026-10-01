@@ -184,9 +184,6 @@ Response:
                 function_description = tool["description"]
                 function_parameters = tool["parameters"]
 
-
-        print(function_description)
-        print(function_parameters)
 #         return f"""you are function parameter generator
 
 # chosen function parameter:

@@ -38,13 +38,14 @@ if __name__ == "__main__":
         specified output path.
     """
 
+    render_exception = get_error_handler()
+    constrained_fn_gen = ConstrainedFunctionNameGenerator()
+    constrained_parm_gen = ConstrainedParameterGenerator()
+
     try:
-        render_exception = get_error_handler()
         config = GenerationConfig.load()
         registry = ToolRegistry(tools=config.tools)
 
-        constrained_fn_gen = ConstrainedFunctionNameGenerator()
-        constrained_parm_gen = ConstrainedParameterGenerator()
         model = Small_LLM_Model()
 
         results: List[Dict[str, Any]] = []
@@ -55,9 +56,11 @@ if __name__ == "__main__":
             response: Dict[str, str] = {}
 
             print(RESET_TERMINAL)
+
             render_configuration(config)
             render_prompts_stat(config.prompts, passed_prompts)
             get_msg_template("green")("PROMPT", prompt)
+
             try:
                 response["prompt"] = prompt
                 response.update(
@@ -85,8 +88,10 @@ if __name__ == "__main__":
             config.write_results(results)
             get_msg_template("green")(
                 "[+] All DONE and SAVED", "")
+
         except (PermissionError, IOError) as e:
             render_exception(e)
+
     except SystemExit:
         pass
     except (BaseException, KeyboardInterrupt) as e:

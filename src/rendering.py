@@ -7,6 +7,9 @@ import sys
 
 
 class AnsiEscape:
+    """
+        A class that contains ANSI escape codes for formatting terminal output.
+    """
     # Reset
     RESET = "\033[0m"
 
