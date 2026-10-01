@@ -41,7 +41,8 @@ class GenerationConfig(BaseModel):
         Loads the configuration from command-line arguments.
 
         Returns:
-            GenerationConfig: An instance of the GenerationConfig class with loaded settings.
+            GenerationConfig: An instance of the GenerationConfig class with
+                            loaded settings.
         """
 
         def get_prompts(input_path: str) -> List[str]:
@@ -187,48 +188,45 @@ Response:
                 function_description = tool["description"]
                 function_parameters = tool["parameters"]
 
-#         return f"""you are function parameter generator
-
-# chosen function parameter:
-# {available_functions}
-
-# the parameter name and his value much the type of parameter above no extra parameter outside the function
-
-
-# Rules for filling parameters:
-# - Regex character classes MUST be wrapped in square brackets: [abc] not abc
-# - NEVER use the English word for a symbol — always use the symbol itself
-# - "replace","substitute","swap","change","convert" all mean the same operation
-
-# User request:
-#     {user_request}
-# Response:
-#         """
-
-        return f"""Extract the arguments for ONE function call from the user request.
-Output a single JSON object containing the parameter values. Nothing else.
+        return f"""you are function parameter generator
 
 Function: {function_name}
 Description: {function_description}
 Parameters:
-{function_parameters}
+{json.dumps(function_parameters, indent=2)}
 
-Rules:
-1. Output exactly the parameters listed above: same names, none missing, no extras.
-2. Match the types: string -> JSON string, number -> JSON number (no quotes),
-   integer -> whole number, boolean -> true or false.
-3. Copy values from the request exactly (spelling, case, spacing).
-   Never translate, correct, or invent values.
-4. Symbols: write the symbol itself, never its name.
-   "asterisk" -> "*", "dollar sign" -> "$", "dot" -> ".", "dash" -> "-"
-5. Regex: always use square-bracket character classes, never backslash shortcuts.
-   digits -> [0-9]+   letters -> [a-zA-Z]+   vowels -> [aeiouAEIOU]
-   a space -> [ ]
-6. "replace", "substitute", "swap", "change", "convert" all mean replace.
-   The text to find is the regex. The new text is the replacement.
-7. Numbers allways float when number is int like 8 convert it to 8.0
-Request: {user_request}
-Output: """
+the parameter name and his value much the type of parameter above no extra
+parameter outside the function
+
+
+Rules for filling parameters:
+- Regex character classes MUST be wrapped in square brackets: [abc] not abc
+- NEVER use the English word for a symbol — always use the symbol itself
+- "replace","substitute","swap","change","convert" all mean the same operation
+
+Examples for filling parameters:
+request: Replace all numbers in "hi 42 bye" with NUM
+response:{{"parameters": {{"source_string": "hi 42 bye",\
+    "regex": "[0-9]+", "replacement": "NUM"}}}}
+
+request: Replace vowels in "hello world" with asterisks
+response: {{"parameters": \
+    {{\
+        "source_string": "hello world", \
+        "regex": "[aeiouAEIOU]", "replacement": "*"}}}}
+
+request: Replace 'cat' with 'dog' in "the cat sat"
+response: {{"parameters": {{\
+        "source_string": "the cat sat", \
+        "regex": "cat", "replacement": "dog"}}}}
+
+request: Substitute all spaces in "hello world foo" with dashes
+response: {{"parameters": {{"source_string": "hello world foo",\
+"regex": "[ ]+", "replacement": "-"}}}}
+User request:
+    {user_request}
+Response:
+        """
 
     def get_valid_names(self) -> List[str]:
         """ Returns a list of valid function names."""
@@ -461,13 +459,15 @@ class ConstrainedParameterGenerator(BaseModel):
                     if token_str.startswith("\""):
                         input_ids += model._tokenizer.encode("\"")
                         generated += model._tokenizer.encode("\"")
-
-                    input_ids += model._tokenizer.encode("}}")
-                    generated += model._tokenizer.encode("}}")
+                    if generated_str.endswith("\""):
+                        input_ids += model._tokenizer.encode("}}")
+                        generated += model._tokenizer.encode("}}")
                 else:
                     input_ids += model._tokenizer.encode(" \"")
                     generated += model._tokenizer.encode(" \"")
                 state = 0
+
+                print(generated_str)
 
             generated_str = model._tokenizer.decode(
                 generated, skip_special_tokens=True)
