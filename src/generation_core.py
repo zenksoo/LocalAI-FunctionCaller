@@ -26,6 +26,9 @@ class FunctionDefSchema(BaseModel):
 
 
 class GenerationConfig(BaseModel):
+    """
+    Configuration class for the generation process.
+    """
     prompts: List[str] = []
     tools: List[dict[str, Any]] = []
     output_path: str
@@ -38,7 +41,7 @@ class GenerationConfig(BaseModel):
         Loads the configuration from command-line arguments.
 
         Returns:
-            Config: An instance of the Config class with loaded settings.
+            GenerationConfig: An instance of the GenerationConfig class with loaded settings.
         """
 
         def get_prompts(input_path: str) -> List[str]:
