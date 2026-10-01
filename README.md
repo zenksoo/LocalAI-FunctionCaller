@@ -4,259 +4,261 @@
 
 ## Description
 
-Call Me Maybe is a Python implementation of function calling for small language
-models. It receives natural-language prompts and a JSON list of available tools,
-then asks the Qwen/Qwen3-0.6B model to produce a structured function name and
-typed arguments instead of a conversational answer.
+Call Me Maybe converts natural-language requests into structured function calls
+using Qwen/Qwen3-0.6B and the supplied `llm_sdk` package. Instead of answering
+“What is the sum of 2 and 3?”, it selects a tool such as `fn_add_numbers` and
+extracts its arguments as JSON.
 
-The project follows the subject's central idea: constrained decoding makes the
-model choose from values allowed by the supplied function definitions. The
-implementation is organized into two generation steps:
-
-1. Select the best function name, or `none` when no description matches.
-2. Extract the parameters for the selected function.
-
-The repository includes the supplied `llm_sdk` package under `LLM_SDK/`, input
-examples under `data/input/`, and the implementation under `src/`.
+The program reads function definitions and prompts from JSON files, constrains
+the model against those definitions, and writes one result per prompt. Function
+names and parameter names are selected from the runtime input, so the solution is
+not hardcoded to the example data.
 
 ## Requirements
 
 - Python 3.10 or later
 - `uv`
-- A local model environment supported by the supplied `llm_sdk`
+- The local model and dependencies provided through `LLM_SDK/`
 
-The project uses Pydantic for input/configuration models and NumPy for logits
-processing. The model dependency is provided through the local `LLM_SDK` package.
+The implementation uses Pydantic for validation and NumPy for logits masking and
+selection.
 
 ## Instructions
 
-Install `uv` if it is not already available:
+Install `uv` if necessary:
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-Install the locked project dependencies:
+Install dependencies and run the default dataset:
 
 ```bash
 make install
-```
-
-Run the default example:
-
-```bash
 make run
 ```
 
-The equivalent command is:
+Equivalent command:
 
 ```bash
 uv run python3 -m src
 ```
 
-By default, the program reads:
+Default paths:
 
-- `data/input/functions_definition.json`
-- `data/input/function_calling_tests.json`
+- Functions: `data/input/functions_definition.json`
+- Prompts: `data/input/function_calling_tests.json`
+- Results: `data/output/function_calling_results.json`
 
-and writes:
-
-- `data/output/function_calling_results.json`
-
-Custom paths can be supplied with the CLI options:
-
-```bash
-uv run python3 -m src \
-	--functions_definition data/input/functions_definition.json \
-	--input data/input/function_calling_tests.json \
-	--output data/output/function_calls.json
-```
-
-Other Make targets are available:
+Other targets:
 
 ```bash
 make debug   # Run through pdb
 make lint    # Run flake8 and mypy with the subject flags
 make clean   # Remove Python and mypy caches
+make web     # Run the optional Flask interface
 ```
 
-## Input Format
+## Example Usage
 
-The prompt file is a JSON array of objects containing a non-empty `prompt`:
+Run with custom files:
+
+```bash
+uv run python3 -m src \
+  --functions_definition data/input/functions_definition.json \
+  --input data/input/function_calling_tests.json \
+  --output data/output/function_calls.json
+```
+
+Prompt input:
 
 ```json
 [
-	{"prompt": "What is the sum of 2 and 3?"},
-	{"prompt": "Reverse the string 'hello'"}
+  {"prompt": "What is the sum of 2 and 3?"},
+  {"prompt": "Reverse the string 'hello'"}
 ]
 ```
 
-The function definition file is a JSON array. Each function has a name,
-description, parameter definitions, and return type:
+Function definition input:
 
 ```json
 [
-	{
-		"name": "fn_add_numbers",
-		"description": "Add two numbers together and return their sum.",
-		"parameters": {
-			"a": {"type": "number"},
-			"b": {"type": "number"}
-		},
-		"returns": {"type": "number"}
-	}
+  {
+    "name": "fn_add_numbers",
+    "description": "Add two numbers together and return their sum.",
+    "parameters": {
+      "a": {"type": "number"},
+      "b": {"type": "number"}
+    },
+    "returns": {"type": "number"}
+  }
 ]
 ```
 
-Malformed JSON, missing files, invalid prompt records, and Pydantic validation
-errors are routed through the formatted error handler in `src/rendering.py`.
-
-## Output Format
-
-For a successful prompt, the program writes an object containing the original
-prompt, the selected function name, and the generated parameters:
+Output:
 
 ```json
 [
-	{
-		"prompt": "What is the sum of 2 and 3?",
-		"name": "fn_add_numbers",
-		"parameters": {
-			"a": 2.0,
-			"b": 3.0
-		}
-	}
+  {
+    "prompt": "What is the sum of 2 and 3?",
+    "name": "fn_add_numbers",
+    "parameters": {"a": 2.0, "b": 3.0}
+  }
 ]
 ```
 
-When no available function matches, the current implementation records the
-function name as `none` and the parameters value as `none`.
+Unknown requests are recorded with the current implementation's `none`
+function name and `none` parameters.
 
-## Algorithm
+## Algorithm Explanation
 
-### Configuration and validation
+### Input validation
 
-`GenerationConfig.load()` parses command-line arguments, loads both JSON input
-files, and validates prompt records with `TestCaseSchema` and function records
-with `FunctionDefSchema`. `ToolRegistry` stores the validated tool definitions
-and builds the prompts used by the model.
+`GenerationConfig.load()` parses CLI options, loads both JSON files, and
+validates records with Pydantic. `TestCaseSchema` requires a non-empty prompt;
+`FunctionDefSchema` validates each function name, description, parameter map, and
+return type. `ToolRegistry` exposes the valid names and parameter names to the
+generators.
 
-### Constrained function-name generation
+### Function-name constrained decoding
 
-`ConstrainedFunctionNameGenerator` constructs a prompt containing the user
-request and the available function descriptions. It then starts generation after
-the JSON prefix `{"name": "`.
+`ConstrainedFunctionNameGenerator` builds a prompt from the request and the
+available function descriptions. It starts generation after the injected prefix:
 
-At each token step, the generator decodes candidate vocabulary tokens and keeps a
-token only when the accumulated text is a prefix of at least one valid function
-name or of `none`. All other logits are set to negative infinity. The highest
-remaining logit is selected with argmax. Once a complete valid name is reached,
-the closing JSON text is injected and generation stops.
+```text
+{"name": "
+```
 
-This prefix filtering prevents the model from producing a function name that is
-not present in the supplied tool registry while still allowing the model to
-choose between the available descriptions.
+At each step, the model returns logits for the next token. NumPy stores the
+logits as an array, and the generator decodes candidate vocabulary tokens to
+check whether the accumulated text is a prefix of a registered function name or
+`none`. Invalid entries are set to negative infinity, then `np.argmax` selects
+the best remaining token. This makes an invalid function name impossible to
+choose while still allowing the language model to select the function.
 
-### Constrained parameter generation
+When a complete valid name is reached, the closing JSON text is injected into the
+context. Fixed punctuation is not generated needlessly, and the resulting text is
+parsed with `json.loads`.
 
-`ConstrainedParameterGenerator` builds a second prompt containing the selected
-function description and its parameter schema. The generator starts after the
-JSON prefix for the `parameters` object.
+### Parameter constrained decoding
 
-The parameter-name state uses the same prefix filtering approach: only tokens
-that can complete one of the selected function's parameter names remain valid.
-When a parameter name is complete, the parameter separator is injected and the
-model generates its value. Parameter names are removed from the remaining set,
-and closing braces or separators are injected as needed. The prompt explicitly
-asks the model to preserve source values, respect JSON types, use symbols rather
-than symbol names, and represent numeric integers as floating-point values.
+`ConstrainedParameterGenerator` is a separate second stage. It receives the
+original request, selected function, and parameter schema, then starts after:
 
-The final generated text is parsed with `json.loads`, so malformed generated JSON
-raises an error instead of silently producing an invalid result.
+```text
+{"parameters": {"
+```
+
+While a parameter name is being generated, the same prefix constraint keeps only
+tokens that can complete one of the selected function's remaining parameters.
+After a name is complete, the separator `": ` is injected and the model extracts
+its value. Known commas, quotes, and closing braces are injected as well. The
+parameter prompt also instructs the model to preserve source values, follow JSON
+types, use symbols literally, format regular expressions, and write numbers as
+floating-point values when required.
+
+Separating function selection from parameter extraction gives each stage a small,
+clear state machine. Injected tokens keep the JSON structure deterministic while
+the model focuses on semantic choices.
 
 ## Design Decisions
 
-- `ToolRegistry` keeps tool discovery and prompt construction separate from the
-	generation loops.
-- Pydantic models validate the external JSON structure before model execution.
-- Function selection and parameter extraction are separate stages, which makes
-	each constraint state small and inspectable.
-- Argmax is used after masking invalid tokens, giving deterministic output for a
-	fixed model and prompt.
-- Terminal output is isolated in `rendering.py`, including progress bars,
-	per-prompt status, and type-specific error messages.
-- `data/output/` is created on demand by `GenerationConfig.write_results()`.
+- **Runtime registry:** Function names, descriptions, and parameters come from
+  the input files, supporting changing evaluator data.
+- **Two generation stages:** Name selection and argument extraction have
+  different constraints and are easier to inspect independently.
+- **NumPy logits processing:** Arrays allow invalid logits to be masked with
+  negative infinity and valid candidates to be selected efficiently with
+  `np.argmax`, avoiding unconstrained generation followed by repair attempts.
+- **Injected tokens:** Known JSON prefixes, separators, and closing delimiters are
+  inserted directly into the context, reducing unnecessary model tokens.
+- **Pydantic validation:** Bad external data fails early with structured errors.
+- **Deterministic selection:** Argmax after masking is repeatable for a fixed
+  model state and prompt.
+- **Separate rendering module:** Progress, token traces, status, and errors do
+  not clutter the generation logic.
 
-## Performance and Reliability
+## Performance Analysis
 
-Each generated token requires a call to `get_logits_from_input_ids`. The current
-implementation favors explicit token-by-token constraints and clarity over
-batching or caching. Runtime therefore depends on the number of prompts, the
-maximum token count, and the local model hardware.
+Compared with asking the model for complete JSON and retrying invalid answers,
+this implementation avoids many invalid branches before token selection. NumPy
+handles the logits array, function names and parameter names are constrained
+separately, and injected JSON tokens remove predictable generation work. These
+choices improve reliability and can reduce wasted generation compared with
+unconstrained prompting.
 
-Reliability is strongest for JSON structure and valid function/parameter names:
-invalid name prefixes are masked before token selection, and the completed text
-is parsed as JSON. Semantic accuracy of values still depends on the model and the
-quality of the natural-language prompt. The repository does not currently include
-an automated accuracy benchmark, so accuracy and runtime should be measured with
-the evaluator's prompt set.
+Each remaining token still requires a model call and vocabulary inspection, so
+runtime depends on vocabulary size, prompt count, maximum token count, and
+hardware. Each stage currently allows up to 200 generated steps. The project does
+not batch prompts or cache logits, so no unmeasured speed claim is made.
 
-## Testing Strategy
+Reliability is strongest for JSON parsing and membership of function and
+parameter names because invalid prefixes are masked. Parameter-value accuracy is
+still model-dependent because values are extracted through the model prompt. The
+included examples are a smoke test; an accuracy percentage should be measured
+with a representative evaluator dataset.
 
-The included input set covers addition, greetings, string reversal, square roots,
-regex replacement, multiple parameters, and quoted values. A practical manual
-check is:
+## Challenges Faced
 
-```bash
-make install
-make lint
-make run
-python3 -m json.tool data/output/function_calling_results.json
-```
+- **Small-model structured output:** A small model may produce invalid JSON or
+  invent a function name. Prefix masking constrains the selectable names.
+- **Subword token boundaries:** Names can span multiple tokens, so the algorithm
+  checks accumulated decoded prefixes rather than assuming one token is one name.
+- **JSON structure:** Quotes, commas, and braces are predictable; injecting them
+  keeps the model from breaking the output format.
+- **Runtime failures:** Missing files, invalid JSON, Pydantic errors, permission
+  failures, and unexpected exceptions are handled by type-specific renderers and
+  top-level exception handling.
+- **Debugging generation:** Terminal visualization exposes each stage, selected
+  token, injected text, partial response, progress, and prompt status.
 
-For additional checks, replace the files passed to `--input` and
-`--functions_definition` with cases containing empty strings, large numbers,
-special characters, multiple parameters, ambiguous descriptions, malformed JSON,
-and missing files. Confirm that successful output is parseable JSON and that every
-generated function name and parameter name comes from the supplied definitions.
+## Bonus Features
 
-## Known Implementation Notes
+The project includes these bonus-oriented features:
 
-The current generator accesses the SDK tokenizer through `model._tokenizer` so it
-can inspect individual token strings during masking. The subject identifies SDK
-private attributes as forbidden; this should be refactored to a public tokenizer
-adapter before submission if the SDK exposes or permits one.
+- **Advanced error handling:** `rendering.py` uses `singledispatch` for Pydantic
+  validation errors, invalid JSON, missing files, permission errors, and generic
+  failures. The entry point also handles prompt-level and application-level
+  exceptions.
+- **Generation visualization:** The terminal renders paths, prompt progress,
+  stage labels, progress bars, selected tokens, injected text, intermediate JSON,
+  final results, and passed/failed prompt markers.
+- **Tokenizer-aware constraints:** Candidate tokens are decoded while masking,
+  so constraints work across subword boundaries.
+- **Optional web target:** The Makefile can launch the Flask interface in `web/`.
 
-The current parameter constraint controls parameter names and delegates value
-generation to the model prompt. A stricter implementation would additionally
-mask tokens according to each parameter's declared primitive type while values
-are being generated.
+The current generator accesses the SDK tokenizer through `model._tokenizer` to
+inspect individual tokens. The subject forbids private SDK attributes, so this
+should be replaced with a public tokenizer adapter before submission if the SDK
+provides one. Parameter names are explicitly constrained; full primitive-type
+masking for parameter values would be a further improvement.
 
 ## Resources and AI Usage
 
-Relevant resources:
+- function calling concept: [hugginface docs](https://huggingface.co/docs/hugs/en/guides/function-calling) | [article on martinfowler](https://martinfowler.com/articles/function-call-LLM.html)
 
-- The provided `en.subject.pdf`, especially the sections on function calling,
-	constrained decoding, JSON schemas, and the `llm_sdk` interface.
-- Python `json` documentation: <https://docs.python.org/3/library/json.html>
+- constrained decoding: [article](https://zeroentropy.dev/concepts/constrained-decoding/)
+
+- JSON: [python-json](https://realpython.com/python-json/)
 - Python `argparse` documentation: <https://docs.python.org/3/library/argparse.html>
 - Pydantic documentation: <https://docs.pydantic.dev/>
 - NumPy documentation: <https://numpy.org/doc/>
 - `uv` documentation: <https://docs.astral.sh/uv/>
 
-AI assistance was used to organize and review project documentation, summarize
-the subject requirements, and explain the existing source structure.
+AI assistance was used to review the subject requirements, organize this
+README, and explain the existing implementation.
 
 ## Project Layout
 
 ```text
 .
 ├── data/input/             Example prompts and function definitions
-├── LLM_SDK/                Local SDK package and model dependency metadata
+├── LLM_SDK/                Local SDK package and model metadata
 ├── src/
-│   ├── __main__.py         CLI entry point and generation orchestration
+│   ├── __main__.py         CLI entry point and orchestration
 │   ├── generation_core.py  Schemas, registry, and constrained generators
-│   └── rendering.py        Terminal progress and error rendering
+│   └── rendering.py        Errors, progress, and terminal visualization
+├── web/                    Optional Flask interface
 ├── Makefile                Install, run, debug, lint, clean, and web targets
 ├── pyproject.toml          Project metadata and dependencies
 └── README.md               Project documentation
