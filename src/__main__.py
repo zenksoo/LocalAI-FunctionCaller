@@ -1,6 +1,6 @@
 from src.generation_core import (GenerationConfig, ToolRegistry,
-                                 ConstrainedFnGenerator,
-                                 ConstrainedParGenerator)
+                                 ConstrainedFunctionNameGenerator,
+                                 ConstrainedParameterGenerator)
 from src.rendering import (get_error_handler, get_msg_template,
                            render_prompts_stat)
 from typing import List, Dict, Any
@@ -37,19 +37,20 @@ if __name__ == "__main__":
         function names and parameters. The results are saved to the
         specified output path.
     """
-    render_exception = get_error_handler()
-    config = GenerationConfig.load()
-    registry = ToolRegistry(tools=config.tools)
 
-    constrained_fn_gen = ConstrainedFnGenerator()
-    constrained_parm_gen = ConstrainedParGenerator()
-    model = Small_LLM_Model()
-
-    results: List[Dict[str, Any]] = []
-    passed_prompts: List[bool] = []
-
-    start = time.perf_counter()
     try:
+        render_exception = get_error_handler()
+        config = GenerationConfig.load()
+        registry = ToolRegistry(tools=config.tools)
+
+        constrained_fn_gen = ConstrainedFunctionNameGenerator()
+        constrained_parm_gen = ConstrainedParameterGenerator()
+        model = Small_LLM_Model()
+
+        results: List[Dict[str, Any]] = []
+        passed_prompts: List[bool] = []
+
+        start = time.perf_counter()
         for prompt in config.prompts:
             response: Dict[str, str] = {}
 
@@ -68,11 +69,9 @@ if __name__ == "__main__":
                         constrained_parm_gen.generate(
                             model, prompt, response["name"], registry))
                 passed_prompts.append(True)
+                results.append(response)
             except KeyboardInterrupt:
-                response["prompt"] = prompt
-                response["error"] = "Skip Generating"
                 passed_prompts.append(False)
-            results.append(response)
 
         print(RESET_TERMINAL)
         render_configuration(config)

@@ -172,29 +172,63 @@ Response:
         Returns:
             str: The generated prompt for function parameter generation.
         """
-        def function_with_parameters() -> Dict[str, str]:
-            """
-            Returns a dictionary mapping function names to their parameters.
-            """
-            return {
-                function_name: e["parameters"]
-                for e in self.tools if e["name"] == function_name}
+        # def function_with_parameters() -> Dict[str, str]:
+        #     """
+        #     Returns a dictionary mapping function names to their parameters.
+        #     """
+        function_description = ""
+        function_parameters = {}
 
-        available_functions = function_with_parameters()
-        return f"""you are function parameter generator
-
-chosen function parameter:
-{available_functions}
+        for tool in self.tools:
+            if (tool["name"] == function_name):
+                function_description = tool["description"]
+                function_parameters = tool["parameters"]
 
 
-Rules for filling parameters:
-- Regex character classes MUST be wrapped in square brackets: [abc] not abc
-- NEVER use the English word for a symbol — always use the symbol itself
-- "replace","substitute","swap","change","convert" all mean the same operation
-User request:
-    {user_request}
-Response:
-        """
+        print(function_description)
+        print(function_parameters)
+#         return f"""you are function parameter generator
+
+# chosen function parameter:
+# {available_functions}
+
+# the parameter name and his value much the type of parameter above no extra parameter outside the function
+
+
+# Rules for filling parameters:
+# - Regex character classes MUST be wrapped in square brackets: [abc] not abc
+# - NEVER use the English word for a symbol — always use the symbol itself
+# - "replace","substitute","swap","change","convert" all mean the same operation
+
+# User request:
+#     {user_request}
+# Response:
+#         """
+
+        return f"""Extract the arguments for ONE function call from the user request.
+Output a single JSON object containing the parameter values. Nothing else.
+
+Function: {function_name}
+Description: {function_description}
+Parameters:
+{function_parameters}
+
+Rules:
+1. Output exactly the parameters listed above: same names, none missing, no extras.
+2. Match the types: string -> JSON string, number -> JSON number (no quotes),
+   integer -> whole number, boolean -> true or false.
+3. Copy values from the request exactly (spelling, case, spacing).
+   Never translate, correct, or invent values.
+4. Symbols: write the symbol itself, never its name.
+   "asterisk" -> "*", "dollar sign" -> "$", "dot" -> ".", "dash" -> "-"
+5. Regex: always use square-bracket character classes, never backslash shortcuts.
+   digits -> [0-9]+   letters -> [a-zA-Z]+   vowels -> [aeiouAEIOU]
+   a space -> [ ]
+6. "replace", "substitute", "swap", "change", "convert" all mean replace.
+   The text to find is the regex. The new text is the replacement.
+7. Numbers allways float when number is int like 8 convert it to 8.0
+Request: {user_request}
+Output: """
 
     def get_valid_names(self) -> List[str]:
         """ Returns a list of valid function names."""
@@ -211,7 +245,7 @@ Response:
 
 
 # generate function name for the given prompt
-class ConstrainedFnGenerator(BaseModel):
+class ConstrainedFunctionNameGenerator(BaseModel):
     def generate(self, model: Small_LLM_Model,
                  prompt: str, registry: ToolRegistry,
                  with_animation: bool = True,
@@ -328,7 +362,7 @@ class ConstrainedFnGenerator(BaseModel):
 
 # generate function parameter base on function name that
 # selected by ConstrainedFnGenerator
-class ConstrainedParGenerator(BaseModel):
+class ConstrainedParameterGenerator(BaseModel):
     def generate(self, model: Small_LLM_Model, prompt: str,
                  function_name: str, registry: ToolRegistry,
                  with_animation: bool = True,

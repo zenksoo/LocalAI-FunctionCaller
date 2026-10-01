@@ -6,35 +6,36 @@ from sys import stderr
 import sys
 
 
-# Reset
-RESET = "\033[0m"
+class AnsiEscape:
+    # Reset
+    RESET = "\033[0m"
 
-# Foreground colors
-FG_BLACK = "\033[30m"
-FG_RED = "\033[31m"
-FG_GREEN = "\033[32m"
-FG_YELLOW = "\033[33m"
-FG_BLUE = "\033[34m"
-FG_MAGENTA = "\033[35m"
-FG_CYAN = "\033[36m"
-FG_WHITE = "\033[37m"
-FG_DEFAULT = "\033[39m"
+    # Foreground colors
+    FG_BLACK = "\033[30m"
+    FG_RED = "\033[31m"
+    FG_GREEN = "\033[32m"
+    FG_YELLOW = "\033[33m"
+    FG_BLUE = "\033[34m"
+    FG_MAGENTA = "\033[35m"
+    FG_CYAN = "\033[36m"
+    FG_WHITE = "\033[37m"
+    FG_DEFAULT = "\033[39m"
 
-# Background colors
-BG_BLACK = "\033[40m"
-BG_RED = "\033[41m"
-BG_GREEN = "\033[42m"
-BG_YELLOW = "\033[43m"
-BG_BLUE = "\033[44m"
-BG_MAGENTA = "\033[45m"
-BG_CYAN = "\033[46m"
-BG_WHITE = "\033[47m"
-BG_DEFAULT = "\033[49m"
+    # Background colors
+    BG_BLACK = "\033[40m"
+    BG_RED = "\033[41m"
+    BG_GREEN = "\033[42m"
+    BG_YELLOW = "\033[43m"
+    BG_BLUE = "\033[44m"
+    BG_MAGENTA = "\033[45m"
+    BG_CYAN = "\033[46m"
+    BG_WHITE = "\033[47m"
+    BG_DEFAULT = "\033[49m"
 
-# symbols
-ARROW = "→"
-OK = "✔"
-FAIL = "✘"
+    # symbols
+    ARROW = "→"
+    OK = "✔"
+    FAIL = "✘"
 
 
 def get_error_handler() -> Callable[[BaseException], None]:
@@ -50,40 +51,46 @@ def get_error_handler() -> Callable[[BaseException], None]:
 
     @singledispatch
     def _handle_by_type(error_type: BaseException) -> None:
-        print(f"{BG_BLUE} {RESET} {error_type}")
+        print(f"{AnsiEscape.BG_BLUE} {AnsiEscape.RESET} {error_type}")
 
     @_handle_by_type.register(ValidationError)
     def _(exc: ValidationError) -> None:
-        print(exc)
-        # for error in exc.errors():
-        #     if error["type"] == "missing":
-        #         print(f"{BG_BLUE} {RESET} Missing",
-        #               "Required Field:",
-        #               file=stderr)
-        #     else:
-        #         print(f"{BG_BLUE} {RESET}", file=stderr)
+        for error in exc.errors():
+            if error["type"] == "missing":
+                print(f"{AnsiEscape.BG_BLUE} {AnsiEscape.RESET} Missing",
+                      "Required Field:",
+                      f"{', '.join([str(e) for e in error['loc']])}",
+                      file=stderr)
+            else:
+                print(
+                    f"{AnsiEscape.BG_BLUE} {AnsiEscape.RESET} {error['msg']}",
+                    file=stderr)
 
     @_handle_by_type.register(JSONDecodeError)
     def _(exc: JSONDecodeError) -> None:
 
-        print(f"{BG_BLUE} {RESET} Invalid",
+        print(f"{AnsiEscape.BG_BLUE} {AnsiEscape.RESET} Invalid",
               f"Formate For JSON File: {exc}\n", file=stderr)
 
     @_handle_by_type.register(PermissionError)
     def _(exc: PermissionError) -> None:
-        print(f"{BG_BLUE} {RESET} Permission Denied: {exc.filename}",
-              file=stderr)
+        print(
+            f"{AnsiEscape.BG_BLUE} {AnsiEscape.RESET}",
+            f"Permission Denied: {exc.filename}",
+            file=stderr)
 
     @_handle_by_type.register(FileNotFoundError)
     def _(exc: FileNotFoundError) -> None:
-        print(f"{BG_BLUE} {RESET} File not found: {exc.filename}",
+        print(f"{AnsiEscape.BG_BLUE} {AnsiEscape.RESET}",
+              f"File not found: {exc.filename}",
               file=stderr)
 
     def render_exception(error: BaseException) -> None:
-        print(f"\n{BG_RED}{FG_BLACK}   Program Failed !!",
-              f"  {RESET}", file=stderr, end="")
-        print(f"{BG_YELLOW}{FG_BLACK} Error Type:",
-              f"{error.__class__.__name__} {RESET}", file=stderr)
+        print(
+            f"\n{AnsiEscape.BG_RED}{AnsiEscape.FG_BLACK}   Program Failed !!",
+            f"  {AnsiEscape.RESET}", file=stderr, end="")
+        print(f"{AnsiEscape.BG_YELLOW}{AnsiEscape.FG_BLACK} Error Type:",
+              f"{error.__class__.__name__} {AnsiEscape.RESET}", file=stderr)
         _handle_by_type(error)
         print(file=stderr)
 
@@ -123,13 +130,16 @@ def render_prompts_stat(prompts: List[str],
         passed_prompt (List[bool]): The list of boolean values indicating
                                     whether each prompt passed.
     """
-    print(f"\n{BG_WHITE}{FG_BLACK}  PASSED PROMPTS       {RESET}    [ ",
+    print(f"\n{AnsiEscape.BG_WHITE}{AnsiEscape.FG_BLACK} "
+          f"PASSED PROMPTS       {AnsiEscape.RESET}    [ ",
           end="")
     for e in passed_prompt:
         if e:
-            print(f"{FG_GREEN} {OK} {RESET}", end="")
+            print(f"{AnsiEscape.FG_GREEN} {AnsiEscape.OK} {AnsiEscape.RESET}",
+                  end="")
         else:
-            print(f"{FG_RED} {FAIL} {RESET}", end="")
+            print(f"{AnsiEscape.FG_RED} {AnsiEscape.FAIL} {AnsiEscape.RESET}",
+                  end="")
     print(" - " * (len(prompts) - len(passed_prompt)), end="")
     print(" ]")
 
@@ -146,12 +156,14 @@ def get_msg_template(color: str) -> Callable:
                   prints a formatted message.
     """
     availble_templates = [
-        BG_CYAN, BG_YELLOW, BG_GREEN, BG_MAGENTA, BG_WHITE, BG_RED]
+        AnsiEscape.BG_CYAN, AnsiEscape.BG_YELLOW, AnsiEscape.BG_GREEN,
+        AnsiEscape.BG_MAGENTA, AnsiEscape.BG_WHITE, AnsiEscape.BG_RED]
     availble_colors = ["cyan", "yellow", "green", "magenta", "white", "red"]
     try:
         template = availble_templates[availble_colors.index(color)]
         return (
             lambda title, msg:
-            print(f"\n{template}{FG_BLACK}  {title}  {RESET}   {msg}"))
+            print(f"\n{template}{AnsiEscape.FG_BLACK} ",
+                  f"{title}  {AnsiEscape.RESET}   {msg}"))
     except ValueError:
         raise ValueError(f"Unregistred Color Name '{color}'!!")
